@@ -1,20 +1,9 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
-    <style name="Theme.MyFirstProject" parent="Theme.MaterialComponents.DayNight.DarkActionBar">
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/osrs_wood</item>
-        <item name="colorPrimaryVariant">@color/osrs_dark_wood</item>
-        <item name="colorOnPrimary">@color/osrs_parchment</item>
-        <!-- Secondary brand color. -->
-        <item name="colorSecondary">@color/osrs_gold</item>
-        <item name="colorSecondaryVariant">@color/osrs_gold_dark</item>
-        <item name="colorOnSecondary">@color/osrs_ink</item>
-        <!-- Status bar color. -->
-        <item name="android:statusBarColor" tools:targetApi="l">?attr/colorPrimaryVariant</item>
+    <style name="Theme.OsrsDryCalc" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor" tools:targetApi="l">@color/osrs_dark_wood</item>
         <item name="android:navigationBarColor">@color/osrs_dark_wood</item>
         <item name="android:windowBackground">@color/osrs_parchment</item>
-        <item name="colorSurface">@color/osrs_parchment</item>
-        <item name="colorOnSurface">@color/osrs_ink</item>
         <!-- Customize your theme here. -->
     </style>
 </resources>

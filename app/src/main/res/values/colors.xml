@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="purple_200">#FFBB86FC</color>
+    <color name="purple_500">#FF6200EE</color>
+    <color name="purple_700">#FF3700B3</color>
+    <color name="teal_200">#FF03DAC5</color>
+    <color name="teal_700">#FF018786</color>
+    <color name="osrs_wood">#5A351C</color>
+    <color name="osrs_dark_wood">#2D190E</color>
+    <color name="osrs_parchment">#F2E2BB</color>
+    <color name="osrs_gold">#C89B3C</color>
+    <color name="osrs_gold_dark">#8D651D</color>
+    <color name="osrs_ink">#2A1A10</color>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>

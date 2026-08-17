@@ -1,0 +1,16 @@
+# Gradle build output and local configuration
+.gradle/
+build/
+app/build/
+local.properties
+
+# Android Studio / IntelliJ user files
+.idea/
+*.iml
+
+# Android build artifacts and captures
+*.apk
+*.aab
+captures/
+.externalNativeBuild/
+.cxx/

@@ -146,7 +146,12 @@ private val verifiedFallbackRates = """
     "$boss|$item" to rate.toDouble()
 }
 
-private fun fallbackRate(boss: String, item: String) = verifiedFallbackRates["${boss.lowercase()}|${item.lowercase()}"]
+private fun isSharedDt2Unique(boss: String, item: String): Boolean =
+    boss in setOf("Duke Sucellus", "Vardorvis", "The Leviathan", "The Whisperer") &&
+        item in setOf("Virtus mask", "Virtus robe top", "Virtus robe bottom", "Chromium ingot")
+
+private fun fallbackRate(boss: String, item: String) =
+    if (isSharedDt2Unique(boss, item)) null else verifiedFallbackRates["${boss.lowercase()}|${item.lowercase()}"]
 
 data class LogItem(val id: Int, val name: String, val quantity: Int)
 data class BossLog(val name: String, val items: List<LogItem>)
@@ -260,6 +265,7 @@ private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<
     return expected > 1.0
 }
 private fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>): String? {
+    if (isSharedDt2Unique(boss, item)) return null
     val kills = k[if (boss == "Kree'arra") "Kree'Arra" else boss] ?: 0
     if (boss == "Amoxliatl" && item == "Frozen tear") return expectedText(actual, kills * 5.55)
     if (boss == "Yama") {
@@ -277,7 +283,7 @@ private fun rateDescription(boss: String, item: String, actual: Int, k: Map<Stri
         "Alchemical Hydra" -> when (item) { "Hydra's claw" -> 1001.0; "Hydra tail" -> 513.0; "Hydra leather" -> 514.0; "Hydra's eye", "Hydra's fang", "Hydra's heart" -> 181.1; else -> 0.0 }
         "Araxxor" -> when (item) { "Araxyte fang", "Noxious point", "Noxious blade", "Noxious pommel" -> 600.0; "Araxyte head" -> 250.0; "Jar of venom" -> 1500.0; else -> 0.0 }
         "Cerberus" -> if (item == "Hellpuppy") 3000.0 else if (item in setOf("Eternal crystal", "Pegasian crystal", "Primordial crystal", "Smouldering stone")) 520.0 else 0.0
-        "Duke Sucellus" -> if (item in setOf("Magus vestige", "Eye of the duke")) 720.0 else 0.0
+        "Duke Sucellus" -> when (item) { "Magus vestige", "Eye of the duke" -> 720.0; "Baron" -> 2500.0; else -> 0.0 }
         "General Graardor" -> if (item == "Bandos hilt") 508.0 else if (item in setOf("Bandos chestplate", "Bandos tassets", "Bandos boots")) 381.0 else 0.0
         "Commander Zilyana" -> mapOf("Armadyl crossbow" to 508.0, "Saradomin sword" to 127.0, "Saradomin's light" to 254.0)[item] ?: 0.0
         "Kree'arra" -> if (item == "Armadyl hilt") 508.0 else if (item in setOf("Armadyl helmet", "Armadyl chestplate")) 381.0 else 0.0
@@ -286,7 +292,7 @@ private fun rateDescription(boss: String, item: String, actual: Int, k: Map<Stri
         "Nex" -> if (item in setOf("Nihil horn", "Torva platebody (damaged)")) 258.0 else 0.0
         "Phantom Muspah" -> if (item == "Venator shard") 100.0 else if (item == "Ancient icon") 50.0 else 0.0
         "Sarachnis" -> mapOf("Sarachnis cudgel" to 384.0, "Giant egg sac(full)" to 20.0, "Pristine spider silk" to 50.0)[item] ?: 0.0
-        "Scurrius" -> if (item == "Scurrius' spine") 33.0 else 0.0; "Maggot King" -> if (item == "Elder venator fang") 340.0 else 0.0; "Vardorvis" -> if (item == "Ultor vestige") 1088.0 else 0.0; "The Whisperer" -> if (item == "Bellator vestige") 512.0 else 0.0
+        "Scurrius" -> if (item == "Scurrius' spine") 33.0 else 0.0; "Maggot King" -> if (item == "Elder venator fang") 340.0 else 0.0; "Vardorvis" -> when (item) { "Ultor vestige", "Executioner's axe head" -> 1088.0; "Butch" -> 3000.0; else -> 0.0 }; "The Leviathan" -> when (item) { "Venator vestige", "Leviathan's lure" -> 768.0; "Lil'viathan" -> 2500.0; else -> 0.0 }; "The Whisperer" -> when (item) { "Bellator vestige", "Siren's staff" -> 512.0; "Wisp" -> 2000.0; "Shadow quartz" -> 209.3; "Sirenic tablet" -> 26.2; else -> 0.0 }
         "Yama" -> when (item) { "Yami" -> 2500.0; "Soulflame horn" -> 300.0; "Oathplate helm", "Oathplate legs" -> 600.0; "Dossier" -> 12.1; "Forgotten lockbox" -> 33.0; "Barrel of demonic tallow (full)" -> 95.11 / 5.0; else -> 0.0 }
         "Zulrah" -> if (item in setOf("Tanzanite fang", "Magic fang", "Serpentine visage")) 512.0 else if (item in setOf("Tanzanite mutagen", "Magma mutagen")) 6553.5 else if (item == "Pet Snakeling") 4000.0 else 0.0
         else -> 0.0
@@ -296,6 +302,7 @@ private fun rateDescription(boss: String, item: String, actual: Int, k: Map<Stri
 }
 private fun barrows(i: String) = i.startsWith("Ahrim's ") || i.startsWith("Dharok's ") || i.startsWith("Guthan's ") || i.startsWith("Karil's ") || i.startsWith("Torag's ") || i.startsWith("Verac's ")
 private fun dropRateLabel(boss: String, item: String): String {
+    if (isSharedDt2Unique(boss, item)) return "special calculation needed"
     if (boss == "The Gauntlet") return when (item) { "Crystal armour seed", "Crystal weapon seed" -> "1 in 120 (normal) / 1 in 50 (corrupted)"; "Enhanced crystal weapon seed" -> "1 in 2,000 (normal) / 1 in 400 (corrupted)"; else -> "not mapped yet" }
     if (boss == "Amoxliatl" && item == "Frozen tear") return "5.55 per kill"
     if (boss == "Yama" && item == "Oathplate shards") return "12 per 17.07 kills"

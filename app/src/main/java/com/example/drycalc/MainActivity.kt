@@ -146,12 +146,33 @@ private val verifiedFallbackRates = """
     "$boss|$item" to rate.toDouble()
 }
 
+private fun sharedRateSources(item: String): Map<String, Double> = when (item) {
+    "Virtus mask", "Virtus robe top", "Virtus robe bottom" -> mapOf("Duke Sucellus" to 2160.0, "Vardorvis" to 3264.0, "The Leviathan" to 2304.0, "The Whisperer" to 1536.0)
+    "Chromium ingot" -> mapOf("Duke Sucellus" to 240.0, "Vardorvis" to 362.7, "The Leviathan" to 256.0, "The Whisperer" to 170.7)
+    "Awakener's orb" -> mapOf("Duke Sucellus" to 48.5, "Vardorvis" to 80.6, "The Leviathan" to 53.6, "The Whisperer" to 34.5)
+    "Godsword shard 1", "Godsword shard 2", "Godsword shard 3" -> mapOf("Commander Zilyana" to 762.0, "General Graardor" to 762.0, "Kree'Arra" to 762.0, "K'ril Tsutsaroth" to 762.0)
+    "Draconic visage" -> mapOf("King Black Dragon" to 5000.0, "Vorkath" to 5000.0)
+    "Dragon chainbody" -> mapOf("Kalphite Queen" to 128.0, "Thermonuclear Smoke Devil" to 2000.0)
+    "Pet Chaos Elemental" -> mapOf("Chaos Elemental" to 300.0, "Chaos Fanatic" to 1000.0)
+    else -> emptyMap()
+}
+
 private fun isSharedDt2Unique(boss: String, item: String): Boolean =
-    boss in setOf("Duke Sucellus", "Vardorvis", "The Leviathan", "The Whisperer") &&
-        item in setOf("Virtus mask", "Virtus robe top", "Virtus robe bottom", "Chromium ingot")
+    sharedRateSources(item).containsKey(if (boss == "Kree'arra") "Kree'Arra" else boss)
+
+private fun sharedDt2Rate(item: String, actual: Int, kills: Map<String, Int>): String {
+    val rates = sharedRateSources(item)
+    val expected = rates.entries.sumOf { (boss, denominator) -> (kills[boss] ?: 0) / denominator }
+    if (expected <= 0) return "special calculation needed"
+    if (actual == 0 && expected < 1) return "${"%.2f".format(Locale.US, expected)} expected • Haven't hit rate yet"
+    if (actual == 0) return "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(expected * 100).toInt()}% dry"
+    return expectedText(actual, expected) ?: "special calculation needed"
+}
 
 private fun fallbackRate(boss: String, item: String) =
     if (isSharedDt2Unique(boss, item)) null else verifiedFallbackRates["${boss.lowercase()}|${item.lowercase()}"]
+
+private fun isExcludedFromRateCalculation(item: String) = item in setOf("Draconic visage", "Occult necklace")
 
 data class LogItem(val id: Int, val name: String, val quantity: Int)
 data class BossLog(val name: String, val items: List<LogItem>)
@@ -265,7 +286,18 @@ private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<
     return expected > 1.0
 }
 private fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>): String? {
-    if (isSharedDt2Unique(boss, item)) return null
+    if (isExcludedFromRateCalculation(item)) return null
+    if (isSharedDt2Unique(boss, item)) return sharedDt2Rate(item, actual, k)
+    if (boss == "Dagannoth Kings") {
+        val source = when (item) {
+            "Seers ring", "Mud battlestaff", "Pet Dagannoth Prime" -> "Dagannoth Prime"
+            "Berserker ring", "Warrior ring", "Pet Dagannoth Rex" -> "Dagannoth Rex"
+            "Archers ring", "Seercull", "Pet Dagannoth Supreme" -> "Dagannoth Supreme"
+            else -> return null
+        }
+        val denominator = if (item.startsWith("Pet Dagannoth")) 5000.0 else 128.0
+        return expectedText(actual, (k[source] ?: 0) / denominator)
+    }
     val kills = k[if (boss == "Kree'arra") "Kree'Arra" else boss] ?: 0
     if (boss == "Amoxliatl" && item == "Frozen tear") return expectedText(actual, kills * 5.55)
     if (boss == "Yama") {
@@ -302,7 +334,14 @@ private fun rateDescription(boss: String, item: String, actual: Int, k: Map<Stri
 }
 private fun barrows(i: String) = i.startsWith("Ahrim's ") || i.startsWith("Dharok's ") || i.startsWith("Guthan's ") || i.startsWith("Karil's ") || i.startsWith("Torag's ") || i.startsWith("Verac's ")
 private fun dropRateLabel(boss: String, item: String): String {
-    if (isSharedDt2Unique(boss, item)) return "special calculation needed"
+    if (isExcludedFromRateCalculation(item)) return "special calculation needed"
+    if (boss == "Dagannoth Kings") return when {
+        item.startsWith("Pet Dagannoth") -> "1 in 5,000 from its matching king"
+        item in setOf("Seers ring", "Mud battlestaff", "Berserker ring", "Warrior ring", "Archers ring", "Seercull") -> "1 in 128 from its matching king"
+        item == "Dragon axe" -> "special calculation needed"
+        else -> "not mapped yet"
+    }
+    if (isSharedDt2Unique(boss, item)) return "combined across all source bosses"
     if (boss == "The Gauntlet") return when (item) { "Crystal armour seed", "Crystal weapon seed" -> "1 in 120 (normal) / 1 in 50 (corrupted)"; "Enhanced crystal weapon seed" -> "1 in 2,000 (normal) / 1 in 400 (corrupted)"; else -> "not mapped yet" }
     if (boss == "Amoxliatl" && item == "Frozen tear") return "5.55 per kill"
     if (boss == "Yama" && item == "Oathplate shards") return "12 per 17.07 kills"

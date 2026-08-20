@@ -8,9 +8,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -176,7 +175,7 @@ private fun isExcludedFromRateCalculation(item: String) = item in setOf("Draconi
 
 data class LogItem(val id: Int, val name: String, val quantity: Int)
 data class BossLog(val name: String, val items: List<LogItem>)
-data class Report(val username: String, val obtained: Int, val total: Int, val accountRate: String, val bosses: List<BossLog>, val kills: Map<String, Int>)
+data class Report(val username: String, val tabName: String, val obtained: Int, val total: Int, val accountRate: String, val bosses: List<BossLog>, val kills: Map<String, Int>)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,27 +190,49 @@ private fun OsrsDryCalcApp() {
     var report by remember { mutableStateOf<Report?>(null) }
     var status by remember { mutableStateOf("Tap Load boss rates to fetch your data.") }
     var loading by remember { mutableStateOf(false) }
+    var selectedTab by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val loadTab: (String) -> Unit = { tabName ->
+        if (username.trim().isEmpty()) { status = "Enter a RuneScape username first." }
+        else {
+            selectedTab = tabName; loading = true; report = null; status = "Loading ${tabName.lowercase()} kill counts and collection-log drops…"
+            scope.launch {
+                runCatching { withContext(Dispatchers.IO) { loadReport(username.trim(), tabName) } }
+                    .onSuccess { report = it; status = "${it.username} — ${it.tabName} log: ${it.obtained}/${it.total} unlocked\nCompletion: ${"%.1f".format(Locale.US, it.obtained * 100.0 / it.total)}%\n${it.accountRate}" }
+                    .onFailure { status = "Could not load RuneProfile data. Check your connection and try again.\n\n${it.message}" }
+                loading = false
+            }
+        }
+    }
     MaterialTheme(colorScheme = lightColorScheme(primary = Wood, secondary = Gold, background = Parchment, surface = Parchment)) {
-        Column(Modifier.fillMaxSize().background(Parchment).verticalScroll(rememberScrollState()).padding(20.dp)) {
-            Text("How Dry Am I?", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(16.dp))
-            OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Enter OSRS Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
-            Spacer(Modifier.height(12.dp))
-            Button(onClick = {
-                if (username.trim().isEmpty()) { status = "Enter a RuneScape username first."; return@Button }
-                loading = true; report = null; status = "Loading kill counts and collection-log drops…"
-                scope.launch {
-                    runCatching { withContext(Dispatchers.IO) { loadReport(username.trim()) } }
-                        .onSuccess { report = it; status = "${it.username} — Boss log: ${it.obtained}/${it.total} unlocked\nBoss-log completion: ${"%.1f".format(Locale.US, it.obtained * 100.0 / it.total)}%\n${it.accountRate}" }
-                        .onFailure { status = "Could not load RuneProfile data. Check your connection and try again.\n\n${it.message}" }
-                    loading = false
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().background(Parchment).padding(horizontal = 20.dp),
+            contentPadding = PaddingValues(vertical = 20.dp)
+        ) {
+            item {
+                Text("How Dry Am I?", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(16.dp))
+                OutlinedTextField(value = username, onValueChange = { username = it }, label = { Text("Enter OSRS Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
+                Spacer(Modifier.height(12.dp))
+            }
+            if (selectedTab == null) {
+                item {
+                    Button(onClick = { loadTab("Bosses") }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Boss log") }
+                    Spacer(Modifier.height(10.dp))
+                    Button(onClick = { loadTab("Raids") }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Raids log") }
+                    Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
                 }
-            }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text(if (loading) "Loading…" else "Load boss rates") }
-            if (loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
-            Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
-            report?.bosses?.forEach { BossCard(it, report!!.kills) }
-            Spacer(Modifier.height(20.dp))
+            } else {
+                item {
+                    OutlinedButton(onClick = { selectedTab = null; report = null; status = "Choose Boss log or Raids log." }, modifier = Modifier.fillMaxWidth()) { Text("Back to log selection") }
+                    if (loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
+                    Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
+                }
+                report?.bosses?.forEach { boss ->
+                    item(key = boss.name) { BossCard(boss, report!!.kills) }
+                }
+            }
+            item { Spacer(Modifier.height(20.dp)) }
         }
     }
 }
@@ -224,7 +245,11 @@ private fun OsrsDryCalcApp() {
     Card(colors = CardDefaults.cardColors(containerColor = cardColor), border = CardDefaults.outlinedCardBorder().copy(brush = androidx.compose.ui.graphics.SolidColor(GoldDark)), modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp)) {
             Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) { Text("${boss.name} — ${collectionKills(boss.name, kills)}", color = GoldDark, fontSize = 19.sp, fontWeight = FontWeight.Bold); Text(bossSummary(boss, kills), color = Ink, fontSize = 14.sp) }
+                Column(Modifier.weight(1f)) {
+                    Text("${boss.name} — ${collectionKills(boss.name, kills)}", color = GoldDark, fontSize = 19.sp, fontWeight = FontWeight.Bold)
+                    if (boss.name == "Chambers of Xeric") Text("Assumed points per completion: Regular 49,750 • Challenge 66,400", color = Ink, fontSize = 13.sp)
+                    Text(bossSummary(boss, kills), color = Ink, fontSize = 14.sp)
+                }
                 Text(if (expanded) "⌃" else "⌄", color = GoldDark, fontSize = 30.sp)
             }
             if (expanded) boss.items.forEach { ItemRow(boss.name, it, kills) }
@@ -235,16 +260,17 @@ private fun OsrsDryCalcApp() {
 @Composable private fun ItemRow(boss: String, item: LogItem, kills: Map<String, Int>) {
     val bitmap by produceState<android.graphics.Bitmap?>(null, item.id) { value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeStream(URL("https://cdn.runeprofile.com/item/${item.id}.png").openStream()) }.getOrNull() } }
     val obtained = item.quantity > 0
+    val showDropRate = !(boss == "Chambers of Xeric" && coxItemWeight(item.name) != null)
     Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).padding(vertical = 5.dp).alpha(if (obtained) 1f else 0.42f), verticalAlignment = Alignment.CenterVertically) {
         bitmap?.let { Image(it.asImageBitmap(), item.name, Modifier.size(55.dp)) }
         Spacer(Modifier.width(12.dp)); Column {
             Text(if (obtained) "${item.name} ×${item.quantity}" else item.name, color = Ink, fontSize = 16.sp)
             if (obtained) {
-                Text("Expected drop rate: ${dropRateLabel(boss, item.name)}", color = Ink, fontSize = 14.sp)
+                if (showDropRate) Text("Expected drop rate: ${dropRateLabel(boss, item.name)}", color = Ink, fontSize = 14.sp)
                 rateDescription(boss, item.name, item.quantity, kills)?.let { Text("Rate: $it", color = Ink, fontSize = 14.sp) }
             }
             else {
-                Text("Expected drop rate: ${dropRateLabel(boss, item.name)}", color = Ink, fontSize = 14.sp)
+                if (showDropRate) Text("Expected drop rate: ${dropRateLabel(boss, item.name)}", color = Ink, fontSize = 14.sp)
                 uncollectedRateDescription(boss, item.name, kills)?.let { Text("Rate: $it", color = Ink, fontSize = 14.sp) }
             }
         }
@@ -252,13 +278,14 @@ private fun OsrsDryCalcApp() {
 }
 
 private fun fetch(url: String): String { val c = URL(url).openConnection() as HttpURLConnection; c.connectTimeout = 15000; c.readTimeout = 20000; c.setRequestProperty("User-Agent", "OsrsDryCalc/1.0"); return c.inputStream.bufferedReader().use { it.readText() }.also { c.disconnect() } }
-private fun loadReport(username: String): Report {
+private fun loadReport(username: String, tabName: String): Report {
     val encoded = URLEncoder.encode(username, "UTF-8").replace("+", "%20")
     val account = JSONObject(fetch("https://api.runeprofile.com/v1/accounts/$encoded/full")); val hiscores = JSONObject(fetch("https://secure.runescape.com/m=hiscore_oldschool/index_lite.json?player=$encoded"))
     val kills = buildMap { hiscores.getJSONArray("activities").let { a -> for (i in 0 until a.length()) put(a.getJSONObject(i).getString("name"), a.getJSONObject(i).getInt("score")) } }
-    val tab = account.getJSONObject("collectionLog").getJSONArray("tabs").let { tabs -> (0 until tabs.length()).map { tabs.getJSONObject(it) }.first { it.getString("name") == "Bosses" } }
+    val tab = account.getJSONObject("collectionLog").getJSONArray("tabs").let { tabs -> (0 until tabs.length()).map { tabs.getJSONObject(it) }.first { it.getString("name") == tabName } }
     val bosses = tab.getJSONArray("pages").let { pages -> (0 until pages.length()).map { p -> pages.getJSONObject(p).let { page -> BossLog(page.getString("name"), page.getJSONArray("items").let { items -> (0 until items.length()).map { x -> items.getJSONObject(x).let { LogItem(it.getInt("id"), it.getString("name"), it.getInt("quantity")) } } }) } } }
-    return Report(account.getString("username"), tab.getInt("obtained"), tab.getInt("total"), accountSummary(bosses, kills), bosses, kills)
+    val summary = if (tabName == "Bosses") accountSummary(bosses, kills) else raidsSummary(bosses, kills)
+    return Report(account.getString("username"), tabName, tab.getInt("obtained"), tab.getInt("total"), summary, bosses, kills)
 }
 
 private fun collectionKills(boss: String, k: Map<String, Int>): String {
@@ -270,6 +297,9 @@ private fun collectionKills(boss: String, k: Map<String, Int>): String {
         "Fortis Colosseum" -> "${n("Sol Heredit")} KC"
         "The Inferno" -> "${n("TzKal-Zuk")} KC"
         "Kree'arra" -> "${n("Kree'Arra")} KC"
+        "Chambers of Xeric" -> "Regular ${n("Chambers of Xeric")} • Challenge ${n("Chambers of Xeric: Challenge Mode")} KC"
+        "Theatre of Blood" -> "${n("Theatre of Blood")} KC"
+        "Tombs of Amascut" -> "${n("Tombs of Amascut")} KC"
         else -> k[boss]?.let { "${n(boss)} KC" } ?: "KC not available in official HiScores"
     }
 }
@@ -279,6 +309,34 @@ private fun uncollectedRateDescription(boss: String, item: String, kills: Map<St
     if (expected < 1.0) return "${"%.2f".format(Locale.US, expected)} expected • Haven't hit rate yet"
     return "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(expected * 100).toInt()}% dry"
 }
+
+// Ancient chest: a 1% unique chance per 8,676 points, then the item's current
+// normal-mode (out of 60) or Challenge Mode (out of 56) table weight.
+// Completion point values are intentionally app assumptions.
+private data class CoxWeight(val normal: Int, val challenge: Int)
+private fun coxItemWeight(item: String): CoxWeight? = when (item) {
+    "Dexterous prayer scroll", "Arcane prayer scroll" -> CoxWeight(normal = 14, challenge = 12)
+    "Twisted buckler", "Dragon hunter crossbow" -> CoxWeight(normal = 4, challenge = 4)
+    "Dinh's bulwark" -> CoxWeight(normal = 3, challenge = 3)
+    "Ancestral hat", "Ancestral robe top", "Ancestral robe bottom" -> CoxWeight(normal = 4, challenge = 4)
+    "Dragon claws" -> CoxWeight(normal = 3, challenge = 3)
+    "Elder maul", "Kodai insignia", "Twisted bow" -> CoxWeight(normal = 2, challenge = 2)
+    else -> null
+}
+private fun coxExpected(item: String, k: Map<String, Int>): Double? {
+    if (item in setOf("Uncut onyx", "Onyx")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) / 400.0
+    if (item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit")) return (k["Chambers of Xeric: Challenge Mode"] ?: 0) / 75.0
+    if (item in setOf("Torn prayer scroll", "Dark relic")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) * 2.0 / 33.0
+    val weight = coxItemWeight(item) ?: return null
+    val regularPoints = (k["Chambers of Xeric"] ?: 0) * 49_750.0
+    val challengePoints = (k["Chambers of Xeric: Challenge Mode"] ?: 0) * 66_400.0
+    return regularPoints / 867_600.0 * weight.normal / 60.0 +
+        challengePoints / 867_600.0 * weight.challenge / 56.0
+}
+private fun coxRateDescription(item: String, actual: Int, k: Map<String, Int>): String? {
+    val expected = coxExpected(item, k) ?: return null
+    return expectedText(actual, expected)
+}
 private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<String, Int>): Boolean {
     if (item.quantity > 0) return true
     val expected = rateDescription(boss, item.name, 0, kills)
@@ -286,6 +344,8 @@ private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<
     return expected > 1.0
 }
 private fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>): String? {
+    if (boss == "Chambers of Xeric") return coxRateDescription(item, actual, k)
+    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return null
     if (isExcludedFromRateCalculation(item)) return null
     if (isSharedDt2Unique(boss, item)) return sharedDt2Rate(item, actual, k)
     if (boss == "Dagannoth Kings") {
@@ -334,6 +394,14 @@ private fun rateDescription(boss: String, item: String, actual: Int, k: Map<Stri
 }
 private fun barrows(i: String) = i.startsWith("Ahrim's ") || i.startsWith("Dharok's ") || i.startsWith("Guthan's ") || i.startsWith("Karil's ") || i.startsWith("Torag's ") || i.startsWith("Verac's ")
 private fun dropRateLabel(boss: String, item: String): String {
+    if (boss == "Chambers of Xeric") return when {
+        coxItemWeight(item) != null -> "weighted Ancient chest unique rate"
+        item in setOf("Uncut onyx", "Onyx") -> "1 in 400 per completion"
+        item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit") -> "1 in 75 per Challenge Mode completion"
+        item in setOf("Torn prayer scroll", "Dark relic") -> "1 in 16.5 per completion"
+        else -> "special calculation needed"
+    }
+    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return "special calculation needed (raid points and settings required)"
     if (isExcludedFromRateCalculation(item)) return "special calculation needed"
     if (boss == "Dagannoth Kings") return when {
         item.startsWith("Pet Dagannoth") -> "1 in 5,000 from its matching king"
@@ -375,6 +443,7 @@ private fun dropRateLabel(boss: String, item: String): String {
     return if (resolvedDenominator == 0.0) "not mapped yet" else "1 in ${String.format(Locale.US, "%,.2f", resolvedDenominator).replace(".00", "")}" 
 }
 private fun bossSummary(b: BossLog, k: Map<String, Int>): String {
+    if (b.name == "Chambers of Xeric") return coxSummary(b.items, k)
     var weightedRate = 0.0
     var totalWeight = 0.0
     val kills = when (b.name) { "Kree'arra" -> k["Kree'Arra"] ?: 0; "The Gauntlet" -> (k["The Gauntlet"] ?: 0) + (k["The Corrupted Gauntlet"] ?: 0); else -> k[b.name] ?: 0 }
@@ -388,6 +457,25 @@ private fun bossSummary(b: BossLog, k: Map<String, Int>): String {
     if (totalWeight == 0.0) return "Weighted total: special calculation needed"
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
+}
+private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String {
+    var weightedRate = 0.0
+    var totalWeight = 0.0
+    items.filter { shouldIncludeInWeightedRate("Chambers of Xeric", it, k) }.forEach { item ->
+        val expected = coxExpected(item.name, k) ?: return@forEach
+        if (expected <= 0) return@forEach
+        val rarityWeight = 1.0 / expected
+        weightedRate += (item.quantity / expected) * rarityWeight
+        totalWeight += rarityWeight
+    }
+    if (totalWeight == 0.0) return "Weighted total: special calculation needed"
+    val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
+    return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
+}
+private fun raidsSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
+    val chambers = bosses.firstOrNull { it.name == "Chambers of Xeric" }
+        ?: return "Mapped weighted rate: special calculation needed"
+    return coxSummary(chambers.items, k).replace("Weighted total", "Chambers mapped rate")
 }
 private fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
     var weightedRate = 0.0

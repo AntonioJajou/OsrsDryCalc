@@ -73,7 +73,7 @@ fun OsrsDryCalcApp() {
                         if (loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
                         Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
                     }
-                    report?.bosses?.forEach { boss -> item(key = boss.name) { BossCard(boss, report!!.kills) { selectedItem = ItemDetail(boss.name, it) } } }
+                    report?.bosses?.forEach { boss -> item(key = boss.name) { BossCard(boss, report!!.kills) { selectedItem = it } } }
                 }
             }
             item { Spacer(Modifier.height(20.dp)) }
@@ -81,7 +81,7 @@ fun OsrsDryCalcApp() {
     }
 }
 
-@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, onItemClick: (LogItem) -> Unit) {
+@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, onItemClick: (ItemDetail) -> Unit) {
     var expanded by rememberSaveable(boss.name) { mutableStateOf(false) }
     if (boss.items.isEmpty()) return
     val cardColor = if (boss.items.all { it.quantity > 0 }) CompletedParchment else Parchment
@@ -96,7 +96,7 @@ fun OsrsDryCalcApp() {
                 }
                 Text(if (expanded) "⌃" else "⌄", color = GoldDark, fontSize = 30.sp)
             }
-            if (expanded) boss.items.forEach { ItemRow(boss.name, it, kills, onItemClick) }
+            if (expanded) boss.items.forEach { item -> ItemRow(boss.name, item, kills) { onItemClick(ItemDetail(boss.name, it)) } }
         }
     }
 }

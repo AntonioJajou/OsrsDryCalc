@@ -47,6 +47,8 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
     }
 }
 private fun expectedText(actual: Int, expected: Double) = if (expected <= 0) null else "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(actual / expected * 100).toInt()}% ${if (actual / expected < 1) "dry" else "spooned"}"
+val bludgeonPieces = setOf("Bludgeon spine", "Bludgeon claw", "Bludgeon axon")
+
 fun uncollectedRateDescription(boss: String, item: String, kills: Map<String, Int>): String? {
     val expected = rateDescription(boss, item, 0, kills)?.substringBefore(" expected")?.toDoubleOrNull() ?: return null
     if (expected < 1.0) return "${"%.2f".format(Locale.US, expected)} expected • Haven't hit rate yet"
@@ -88,6 +90,9 @@ private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<
 }
 fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>): String? {
     if (boss == "Chambers of Xeric") return coxRateDescription(item, actual, k)
+    if (boss == "Abyssal Sire" && item in bludgeonPieces) {
+        return expectedText(actual, (k[boss] ?: 0) / (100.0 * 128.0 / 62.0))
+    }
     if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return null
     if (isExcludedFromRateCalculation(item)) return null
     if (isSharedDt2Unique(boss, item)) return sharedDt2Rate(item, actual, k)
@@ -111,7 +116,10 @@ fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>
     }
     if (boss == "The Gauntlet") { val expected = when (item) { "Crystal armour seed", "Crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 120.0 + (k["The Corrupted Gauntlet"] ?: 0) / 50.0; "Enhanced crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 2000.0 + (k["The Corrupted Gauntlet"] ?: 0) / 400.0; else -> 0.0 }; return expectedText(actual, expected) }
     val d = when (boss) {
-        "Abyssal Sire" -> if (item == "Unsired") 100.0 else 0.0
+        "Abyssal Sire" -> when (item) {
+            "Unsired" -> 100.0
+            else -> 0.0
+        }
         "Barrows Chests" -> if (barrows(item)) 350.14 else 0.0
         "Amoxliatl" -> if (item == "Pendant of ates (inert)") 25.0 else 0.0
         "Brutus" -> mapOf("Mooleta" to 30.0, "Bottomless milk bucket (empty)" to 37.5, "Cow slippers" to 150.0, "Beef" to 1000.0)[item] ?: 0.0
@@ -145,6 +153,7 @@ fun dropRateLabel(boss: String, item: String): String {
         else -> "special calculation needed"
     }
     if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return "special calculation needed (raid points and settings required)"
+    if (boss == "Abyssal Sire" && item in bludgeonPieces) return "1 in 206.45"
     if (isExcludedFromRateCalculation(item)) return "special calculation needed"
     if (boss == "Dagannoth Kings") return when {
         item.startsWith("Pet Dagannoth") -> "1 in 5,000 from its matching king"
@@ -158,7 +167,10 @@ fun dropRateLabel(boss: String, item: String): String {
     if (boss == "Yama" && item == "Oathplate shards") return "12 per 17.07 kills"
     if (boss == "Yama" && item == "Chasm teleport scroll") return "24 per 95.11 kills"
     val denominator = when (boss) {
-        "Abyssal Sire" -> if (item == "Unsired") 100.0 else 0.0
+        "Abyssal Sire" -> when (item) {
+            "Unsired" -> 100.0
+            else -> 0.0
+        }
         "Barrows Chests" -> if (barrows(item)) 350.14 else 0.0
         "Amoxliatl" -> if (item == "Pendant of ates (inert)") 25.0 else 0.0
         "Brutus" -> mapOf("Mooleta" to 30.0, "Bottomless milk bucket (empty)" to 37.5, "Cow slippers" to 150.0, "Beef" to 1000.0)[item] ?: 0.0

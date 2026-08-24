@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -34,7 +35,17 @@ fun OsrsDryCalcApp() {
     var loading by remember { mutableStateOf(false) }
     var selectedTab by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedItem by remember { mutableStateOf<ItemDetail?>(null) }
+    val listState = rememberLazyListState()
+    var returnScrollIndex by rememberSaveable { mutableIntStateOf(0) }
+    var returnScrollOffset by rememberSaveable { mutableIntStateOf(0) }
+    var restoreScrollPosition by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    LaunchedEffect(selectedItem, restoreScrollPosition) {
+        if (selectedItem == null && restoreScrollPosition) {
+            listState.scrollToItem(returnScrollIndex, returnScrollOffset)
+            restoreScrollPosition = false
+        }
+    }
     val loadTab: (String) -> Unit = { tabName ->
         if (username.trim().isEmpty()) status = "Enter a RuneScape username first."
         else {
@@ -52,7 +63,7 @@ fun OsrsDryCalcApp() {
         }
     }
     MaterialTheme(colorScheme = lightColorScheme(primary = Wood, secondary = Gold, background = Parchment, surface = Parchment)) {
-        LazyColumn(Modifier.fillMaxSize().background(Parchment).padding(horizontal = 20.dp), contentPadding = PaddingValues(vertical = 20.dp)) {
+        LazyColumn(Modifier.fillMaxSize().background(Parchment).padding(horizontal = 20.dp), state = listState, contentPadding = PaddingValues(vertical = 20.dp)) {
             item {
                 Text("How Dry Am I?", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
@@ -73,7 +84,14 @@ fun OsrsDryCalcApp() {
                         if (loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
                         Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
                     }
-                    report?.bosses?.forEach { boss -> item(key = boss.name) { BossCard(boss, report!!.kills) { selectedItem = it } } }
+                    report?.bosses?.forEach { boss -> item(key = boss.name) {
+                        BossCard(boss, report!!.kills) { detail ->
+                            returnScrollIndex = listState.firstVisibleItemIndex
+                            returnScrollOffset = listState.firstVisibleItemScrollOffset
+                            restoreScrollPosition = true
+                            selectedItem = detail
+                        }
+                    } }
                 }
             }
             item { Spacer(Modifier.height(20.dp)) }
@@ -92,7 +110,7 @@ fun OsrsDryCalcApp() {
                 Column(Modifier.weight(1f)) {
                     Text("${boss.name} — ${collectionKills(boss.name, kills)}", color = GoldDark, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     if (boss.name == "Chambers of Xeric") Text("Assumed points per completion: Regular 49,750 • Challenge 66,400", color = Ink, fontSize = 13.sp)
-                    Text(bossSummary(boss, kills), color = Ink, fontSize = 14.sp)
+                    bossSummary(boss, kills)?.let { Text(it, color = Ink, fontSize = 14.sp) }
                 }
                 Text(if (expanded) "⌃" else "⌄", color = GoldDark, fontSize = 30.sp)
             }
@@ -109,7 +127,10 @@ fun OsrsDryCalcApp() {
         bitmap?.let { Image(it.asImageBitmap(), item.name, Modifier.size(55.dp)) }
         Spacer(Modifier.width(12.dp)); Column {
             Text(if (obtained) "${item.name} ×${item.quantity}" else item.name, color = Ink, fontSize = 16.sp)
-            if (showDropRate) Text("Expected drop rate: ${dropRateLabel(boss, item.name)}", color = Ink, fontSize = 14.sp)
+            if (showDropRate) {
+                val rateLabel = dropRateLabel(boss, item.name)
+                Text(if (isExcludedFromRateCalculation(item.name)) rateLabel else "Expected drop rate: $rateLabel", color = Ink, fontSize = 14.sp)
+            }
             val rate = if (obtained) rateDescription(boss, item.name, item.quantity, kills) else uncollectedRateDescription(boss, item.name, kills)
             rate?.let { Text("Rate: $it", color = Ink, fontSize = 14.sp) }
         }
@@ -137,7 +158,9 @@ fun OsrsDryCalcApp() {
                 Spacer(Modifier.height(18.dp)); Text("Collection log: ${detail.boss}", color = Ink, fontSize = 16.sp)
                 Text("Kill count: ${collectionKills(detail.boss, kills)}", color = Ink, fontSize = 16.sp)
                 if (detail.boss == "Chambers of Xeric") Text("Assumed points: 49,750 regular • 66,400 Challenge", color = Ink, fontSize = 16.sp)
-                Spacer(Modifier.height(12.dp)); Text("Expected drop rate: ${itemDetailsDropRate(detail.boss, item.name)}", color = Ink, fontSize = 16.sp)
+                Spacer(Modifier.height(12.dp))
+                val dropRate = itemDetailsDropRate(detail.boss, item.name)
+                Text(if (isExcludedFromRateCalculation(item.name)) dropRate else "Expected drop rate: $dropRate", color = Ink, fontSize = 16.sp)
                 Text("Your rate: ${calculatedRate ?: "Not mapped yet"}", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
         }

@@ -1,4 +1,4 @@
-package com.example.drycalc.model
+package com.antoniojajou.drycalc.model
 
 data class LogItem(val id: Int, val name: String, val quantity: Int)
 data class BossLog(val name: String, val items: List<LogItem>)

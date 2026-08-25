@@ -1,4 +1,4 @@
-package com.example.drycalc.rates
+package com.antoniojajou.drycalc.rates
 
 // Backup denominators for collection-log drops without a bespoke calculation.
 val verifiedFallbackRates = """
@@ -23,6 +23,7 @@ val verifiedFallbackRates = """
     corporeal beast|spectral sigil|1365
     corporeal beast|arcane sigil|1365
     corporeal beast|spirit shield|64
+    corporeal beast|holy elixir|170.67
     corporeal beast|jar of spirits|1000
     crazy archaeologist|fedora|128
     crazy archaeologist|malediction shard 2|256
@@ -73,6 +74,7 @@ val verifiedFallbackRates = """
     tempoross|tiny tempor|8000
     tempoross|big harpoonfish|1600
     thermonuclear smoke devil|pet smoke devil|3000
+    thermonuclear smoke devil|smoke battlestaff|512
     thermonuclear smoke devil|jar of smoke|2000
     vardorvis|executioner's axe head|1088
     vorkath|vorki|3000

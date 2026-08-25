@@ -1,7 +1,7 @@
-package com.example.drycalc.rates
+package com.antoniojajou.drycalc.rates
 
-import com.example.drycalc.model.BossLog
-import com.example.drycalc.model.LogItem
+import com.antoniojajou.drycalc.model.BossLog
+import com.antoniojajou.drycalc.model.LogItem
 import java.util.Locale
 
 private fun sharedRateSources(item: String): Map<String, Double> = when (item) {
@@ -21,16 +21,42 @@ private fun isSharedDt2Unique(boss: String, item: String): Boolean =
 private fun sharedDt2Rate(item: String, actual: Int, kills: Map<String, Int>): String {
     val rates = sharedRateSources(item)
     val expected = rates.entries.sumOf { (boss, denominator) -> (kills[boss] ?: 0) / denominator }
-    if (expected <= 0) return "special calculation needed"
+    if (expected <= 0) return "Dry rate unavailable"
     if (actual == 0 && expected < 1) return "${"%.2f".format(Locale.US, expected)} expected • Haven't hit rate yet"
     if (actual == 0) return "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(expected * 100).toInt()}% dry"
-    return expectedText(actual, expected) ?: "special calculation needed"
+    return expectedText(actual, expected) ?: "Dry rate unavailable"
 }
 
 private fun fallbackRate(boss: String, item: String) =
     if (isSharedDt2Unique(boss, item)) null else verifiedFallbackRates["${boss.lowercase()}|${item.lowercase()}"]
 
-private fun isExcludedFromRateCalculation(item: String) = item in setOf("Draconic visage", "Occult necklace")
+// These collection-log entries are supplies, reward-pool items, or guaranteed
+// completion rewards. They remain visible but are deliberately excluded from dry calculations.
+private val excludedBossLogItems = setOf(
+    "Araxyte venom sac", "Coagulated venom", "Bolt rack", "Key master teleport",
+    "Immaculate mole skin", "Mole claw", "Mole skin", "Granite dust",
+    "Ancient essence", "Charged ice", "Frozen cache", "Sunfire splinters",
+    "Atlatl dart", "Nihil shard", "Desiccated page", "Soaked page", "Spirit flakes",
+    "Bruma torch", "Burnt page", "Zulrah's scales", "Huasca seed", "Hueycoatl hide",
+    "Soiled page", "Dark totem", "Fire cape", "Infernal cape", "Gauntlet cape",
+    "Pyromancer boots", "Pyromancer garb", "Pyromancer hood", "Pyromancer robe",
+    "Warm gloves", "Tome of Fire (empty)", "Fish barrel", "Tackle box",
+    "Spirit angler boots", "Spirit angler headband", "Spirit angler top", "Spirit angler waders",
+    "Tome of Water (empty)"
+)
+// These can also come from Slayer monsters, but the official HiScores do not
+// provide enough source-specific KC to calculate a fair boss-only dry rate.
+private val sharedWithSlayerLogItems = setOf(
+    "Araxyte head",
+    "Abyssal dagger", "Abyssal head", "Abyssal whip", "Draconic visage",
+    "Dragon chainbody", "Dragon harpoon", "Dragon knife", "Dragon thrownaxe",
+    "Frozen tear", "Glacial temotli", "Gryphon feather", "Hydra tail",
+    "Hydra's eye", "Hydra's fang", "Hydra's heart", "Kraken tentacle",
+    "Occult necklace", "Pendant of Ates (inert)"
+)
+fun isSharedWithSlayerMonster(item: String) = item in sharedWithSlayerLogItems
+fun isExcludedFromRateCalculation(item: String) =
+    item in excludedBossLogItems || item in sharedWithSlayerLogItems
 fun collectionKills(boss: String, k: Map<String, Int>): String {
     fun n(name: String) = String.format(Locale.US, "%,d", k[name] ?: 0)
     return when (boss) {
@@ -118,20 +144,21 @@ fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>
     val d = when (boss) {
         "Abyssal Sire" -> when (item) {
             "Unsired" -> 100.0
+            "Jar of Miasma" -> 100.0 * 128.0 / 13.0
             else -> 0.0
         }
         "Barrows Chests" -> if (barrows(item)) 350.14 else 0.0
         "Amoxliatl" -> if (item == "Pendant of ates (inert)") 25.0 else 0.0
         "Brutus" -> mapOf("Mooleta" to 30.0, "Bottomless milk bucket (empty)" to 37.5, "Cow slippers" to 150.0, "Beef" to 1000.0)[item] ?: 0.0
-        "Alchemical Hydra" -> when (item) { "Hydra's claw" -> 1001.0; "Hydra tail" -> 513.0; "Hydra leather" -> 514.0; "Hydra's eye", "Hydra's fang", "Hydra's heart" -> 181.1; else -> 0.0 }
-        "Araxxor" -> when (item) { "Araxyte fang", "Noxious point", "Noxious blade", "Noxious pommel" -> 600.0; "Araxyte head" -> 250.0; "Jar of venom" -> 1500.0; else -> 0.0 }
+        "Alchemical Hydra" -> when (item) { "Hydra's claw" -> 1001.0; "Hydra tail" -> 513.0; "Hydra leather" -> 514.0; "Hydra's eye", "Hydra's fang", "Hydra's heart" -> 181.1; "Alchemical hydra heads" -> 256.0; else -> 0.0 }
+        "Araxxor" -> when (item) { "Araxyte fang", "Noxious point", "Noxious blade", "Noxious pommel" -> 600.0; "Araxyte head" -> 250.0; "Jar of Venom" -> 1500.0; else -> 0.0 }
         "Cerberus" -> if (item == "Hellpuppy") 3000.0 else if (item in setOf("Eternal crystal", "Pegasian crystal", "Primordial crystal", "Smouldering stone")) 520.0 else 0.0
-        "Duke Sucellus" -> when (item) { "Magus vestige", "Eye of the duke" -> 720.0; "Baron" -> 2500.0; else -> 0.0 }
+        "Duke Sucellus" -> when (item) { "Magus vestige", "Eye of the Duke" -> 720.0; "Baron" -> 2500.0; else -> 0.0 }
         "General Graardor" -> if (item == "Bandos hilt") 508.0 else if (item in setOf("Bandos chestplate", "Bandos tassets", "Bandos boots")) 381.0 else 0.0
         "Commander Zilyana" -> mapOf("Armadyl crossbow" to 508.0, "Saradomin sword" to 127.0, "Saradomin's light" to 254.0)[item] ?: 0.0
         "Kree'arra" -> if (item == "Armadyl hilt") 508.0 else if (item in setOf("Armadyl helmet", "Armadyl chestplate")) 381.0 else 0.0
         "K'ril Tsutsaroth" -> if (item == "Zamorakian spear") 127.0 else if (item == "Zamorak hilt") 508.0 else 0.0
-        "Kalphite Queen" -> if (item == "Jar of sand") 2000.0 else 0.0
+        "Kalphite Queen" -> if (item == "Jar of Sand") 2000.0 else 0.0
         "Nex" -> if (item in setOf("Nihil horn", "Torva platebody (damaged)")) 258.0 else 0.0
         "Phantom Muspah" -> if (item == "Venator shard") 100.0 else if (item == "Ancient icon") 50.0 else 0.0
         "Sarachnis" -> mapOf("Sarachnis cudgel" to 384.0, "Giant egg sac(full)" to 20.0, "Pristine spider silk" to 50.0)[item] ?: 0.0
@@ -150,15 +177,17 @@ fun dropRateLabel(boss: String, item: String): String {
         item in setOf("Uncut onyx", "Onyx") -> "1 in 400 per completion"
         item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit") -> "1 in 75 per Challenge Mode completion"
         item in setOf("Torn prayer scroll", "Dark relic") -> "1 in 16.5 per completion"
-        else -> "special calculation needed"
+        else -> "Dry rate unavailable"
     }
-    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return "special calculation needed (raid points and settings required)"
+    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return "Dry rate unavailable — raid points and settings required"
     if (boss == "Abyssal Sire" && item in bludgeonPieces) return "1 in 206.45"
-    if (isExcludedFromRateCalculation(item)) return "special calculation needed"
+    if (item in sharedWithSlayerLogItems) return "Not included — dropped by Slayer monster"
+    if (item in excludedBossLogItems) return "Not included in dry calculations"
+    if (isExcludedFromRateCalculation(item)) return "Not included in dry calculations"
     if (boss == "Dagannoth Kings") return when {
         item.startsWith("Pet Dagannoth") -> "1 in 5,000 from its matching king"
         item in setOf("Seers ring", "Mud battlestaff", "Berserker ring", "Warrior ring", "Archers ring", "Seercull") -> "1 in 128 from its matching king"
-        item == "Dragon axe" -> "special calculation needed"
+        item == "Dragon axe" -> "Dry rate unavailable — source-specific KC required"
         else -> "not mapped yet"
     }
     if (isSharedDt2Unique(boss, item)) return "combined across all source bosses"
@@ -169,20 +198,21 @@ fun dropRateLabel(boss: String, item: String): String {
     val denominator = when (boss) {
         "Abyssal Sire" -> when (item) {
             "Unsired" -> 100.0
+            "Jar of Miasma" -> 100.0 * 128.0 / 13.0
             else -> 0.0
         }
         "Barrows Chests" -> if (barrows(item)) 350.14 else 0.0
         "Amoxliatl" -> if (item == "Pendant of ates (inert)") 25.0 else 0.0
         "Brutus" -> mapOf("Mooleta" to 30.0, "Bottomless milk bucket (empty)" to 37.5, "Cow slippers" to 150.0, "Beef" to 1000.0)[item] ?: 0.0
-        "Alchemical Hydra" -> when (item) { "Hydra's claw" -> 1001.0; "Hydra tail" -> 513.0; "Hydra leather" -> 514.0; "Hydra's eye", "Hydra's fang", "Hydra's heart" -> 181.1; else -> 0.0 }
-        "Araxxor" -> when (item) { "Araxyte fang", "Noxious point", "Noxious blade", "Noxious pommel" -> 600.0; "Araxyte head" -> 250.0; "Jar of venom" -> 1500.0; else -> 0.0 }
+        "Alchemical Hydra" -> when (item) { "Hydra's claw" -> 1001.0; "Hydra tail" -> 513.0; "Hydra leather" -> 514.0; "Hydra's eye", "Hydra's fang", "Hydra's heart" -> 181.1; "Alchemical hydra heads" -> 256.0; else -> 0.0 }
+        "Araxxor" -> when (item) { "Araxyte fang", "Noxious point", "Noxious blade", "Noxious pommel" -> 600.0; "Araxyte head" -> 250.0; "Jar of Venom" -> 1500.0; else -> 0.0 }
         "Cerberus" -> if (item == "Hellpuppy") 3000.0 else if (item in setOf("Eternal crystal", "Pegasian crystal", "Primordial crystal", "Smouldering stone")) 520.0 else 0.0
-        "Duke Sucellus" -> if (item in setOf("Magus vestige", "Eye of the duke")) 720.0 else 0.0
+        "Duke Sucellus" -> if (item in setOf("Magus vestige", "Eye of the Duke")) 720.0 else 0.0
         "General Graardor" -> if (item == "Bandos hilt") 508.0 else if (item in setOf("Bandos chestplate", "Bandos tassets", "Bandos boots")) 381.0 else 0.0
         "Commander Zilyana" -> mapOf("Armadyl crossbow" to 508.0, "Saradomin sword" to 127.0, "Saradomin's light" to 254.0)[item] ?: 0.0
         "Kree'arra" -> if (item == "Armadyl hilt") 508.0 else if (item in setOf("Armadyl helmet", "Armadyl chestplate")) 381.0 else 0.0
         "K'ril Tsutsaroth" -> if (item == "Zamorakian spear") 127.0 else if (item == "Zamorak hilt") 508.0 else 0.0
-        "Kalphite Queen" -> if (item == "Jar of sand") 2000.0 else 0.0
+        "Kalphite Queen" -> if (item == "Jar of Sand") 2000.0 else 0.0
         "Nex" -> if (item in setOf("Nihil horn", "Torva platebody (damaged)")) 258.0 else 0.0
         "Phantom Muspah" -> if (item == "Venator shard") 100.0 else if (item == "Ancient icon") 50.0 else 0.0
         "Sarachnis" -> mapOf("Sarachnis cudgel" to 384.0, "Giant egg sac(full)" to 20.0, "Pristine spider silk" to 50.0)[item] ?: 0.0
@@ -197,7 +227,7 @@ fun dropRateLabel(boss: String, item: String): String {
     val resolvedDenominator = if (denominator == 0.0) fallbackRate(boss, item) ?: 0.0 else denominator
     return if (resolvedDenominator == 0.0) "not mapped yet" else "1 in ${String.format(Locale.US, "%,.2f", resolvedDenominator).replace(".00", "")}" 
 }
-fun bossSummary(b: BossLog, k: Map<String, Int>): String {
+fun bossSummary(b: BossLog, k: Map<String, Int>): String? {
     if (b.name == "Chambers of Xeric") return coxSummary(b.items, k)
     var weightedRate = 0.0
     var totalWeight = 0.0
@@ -209,11 +239,11 @@ fun bossSummary(b: BossLog, k: Map<String, Int>): String {
         weightedRate += (item.quantity / expected) * weight
         totalWeight += weight
     }
-    if (totalWeight == 0.0) return "Weighted total: special calculation needed"
+    if (totalWeight == 0.0) return "Weighted total: Haven't hit an expected drop rate"
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
 }
-private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String {
+private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String? {
     var weightedRate = 0.0
     var totalWeight = 0.0
     items.filter { shouldIncludeInWeightedRate("Chambers of Xeric", it, k) }.forEach { item ->
@@ -223,14 +253,15 @@ private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String {
         weightedRate += (item.quantity / expected) * rarityWeight
         totalWeight += rarityWeight
     }
-    if (totalWeight == 0.0) return "Weighted total: special calculation needed"
+    if (totalWeight == 0.0) return "Weighted total: Haven't hit an expected drop rate"
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
 }
 fun raidsSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
     val chambers = bosses.firstOrNull { it.name == "Chambers of Xeric" }
-        ?: return "Mapped weighted rate: special calculation needed"
-    return coxSummary(chambers.items, k).replace("Weighted total", "Chambers mapped rate")
+        ?: return "Mapped weighted rate: no Chambers data available"
+    return coxSummary(chambers.items, k)?.replace("Weighted total", "Chambers mapped rate")
+        ?: "Chambers mapped rate: Haven't hit an expected drop rate"
 }
 fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
     var weightedRate = 0.0
@@ -250,7 +281,7 @@ fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
             totalWeight += rarityWeight
         }
     }
-    if (totalWeight == 0.0) return "Mapped weighted rate: special calculation needed"
+    if (totalWeight == 0.0) return "Mapped weighted rate: Haven't hit an expected drop rate yet"
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Mapped weighted rate: $percent% ${if (percent < 100) "dry" else "spooned"}"
 }

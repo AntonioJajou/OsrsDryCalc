@@ -64,7 +64,6 @@ val verifiedFallbackRates = """
     nex|zaryte vambraces|172
     nex|torva full helm (damaged)|258
     nex|torva platelegs (damaged)|258
-    nex|nihil shard|10.08
     obor|hill giant club|118
     phantom muspah|muphin|2500
     royal titans|bran|3000

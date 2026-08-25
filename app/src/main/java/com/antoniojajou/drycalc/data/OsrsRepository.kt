@@ -1,10 +1,10 @@
-package com.example.drycalc.data
+package com.antoniojajou.drycalc.data
 
-import com.example.drycalc.model.BossLog
-import com.example.drycalc.model.LogItem
-import com.example.drycalc.model.Report
-import com.example.drycalc.rates.accountSummary
-import com.example.drycalc.rates.raidsSummary
+import com.antoniojajou.drycalc.model.BossLog
+import com.antoniojajou.drycalc.model.LogItem
+import com.antoniojajou.drycalc.model.Report
+import com.antoniojajou.drycalc.rates.accountSummary
+import com.antoniojajou.drycalc.rates.raidsSummary
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL

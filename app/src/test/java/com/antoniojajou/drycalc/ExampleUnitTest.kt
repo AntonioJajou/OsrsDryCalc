@@ -1,4 +1,4 @@
-package com.example.drycalc
+package com.antoniojajou.drycalc
 
 import org.junit.Assert.assertEquals
 import org.junit.Test

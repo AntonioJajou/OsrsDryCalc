@@ -1,4 +1,4 @@
-package com.example.drycalc.rates
+package com.antoniojajou.drycalc.rates
 
 // Backup denominators for collection-log drops without a bespoke calculation.
 val verifiedFallbackRates = """

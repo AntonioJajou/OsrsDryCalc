@@ -1,4 +1,4 @@
-package com.example.drycalc.ui
+package com.antoniojajou.drycalc.ui
 
 import androidx.compose.ui.graphics.Color
 

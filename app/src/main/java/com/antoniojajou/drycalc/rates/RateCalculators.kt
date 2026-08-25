@@ -1,7 +1,7 @@
-package com.example.drycalc.rates
+package com.antoniojajou.drycalc.rates
 
-import com.example.drycalc.model.BossLog
-import com.example.drycalc.model.LogItem
+import com.antoniojajou.drycalc.model.BossLog
+import com.antoniojajou.drycalc.model.LogItem
 import java.util.Locale
 
 private fun sharedRateSources(item: String): Map<String, Double> = when (item) {

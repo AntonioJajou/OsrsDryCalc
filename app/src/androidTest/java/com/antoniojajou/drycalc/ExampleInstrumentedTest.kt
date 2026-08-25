@@ -1,4 +1,4 @@
-package com.example.drycalc
+package com.antoniojajou.drycalc
 
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -11,6 +11,6 @@ class ExampleInstrumentedTest {
     @Test
     fun useAppContext() {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.example.drycalc", appContext.packageName)
+        assertEquals("com.antoniojajou.drycalc", appContext.packageName)
     }
 }

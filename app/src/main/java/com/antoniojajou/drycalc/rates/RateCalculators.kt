@@ -45,7 +45,9 @@ private fun isSharedDt2Unique(boss: String, item: String): Boolean =
 
 private fun sharedSourceLabel(item: String): String {
     val sources = sharedRateSources(item)
-    if (sources.size > 2) return "source-weighted across ${sources.size} boss sources"
+    val dt2Bosses = setOf("Duke Sucellus", "Vardorvis", "The Leviathan", "The Whisperer")
+    if (sources.keys == dt2Bosses) return "DT2 weighted (4 bosses)"
+    if (sources.size > 2) return "${sources.size}-boss weighted"
     return sources.entries.joinToString(" • ") { (source, rate) ->
         "$source 1 in ${String.format(Locale.US, "%,.0f", rate)}"
     }
@@ -102,6 +104,10 @@ private val wildernessBossSources = mapOf(
 private fun bossKills(boss: String, k: Map<String, Int>): Int = when (boss) {
     "Kree'arra" -> k["Kree'Arra"] ?: 0
     "The Gauntlet" -> (k["The Gauntlet"] ?: 0) + (k["The Corrupted Gauntlet"] ?: 0)
+    "The Mad Angel" -> k["Mad Angel"] ?: 0
+    "Moons of Peril" -> k["Lunar Chests"] ?: 0
+    "The Nightmare" -> k["Nightmare"] ?: 0
+    "Royal Titans" -> k["The Royal Titans"] ?: 0
     else -> wildernessBossSources[boss]?.sumOf { source -> k[source] ?: 0 } ?: (k[boss] ?: 0)
 }
 
@@ -114,6 +120,10 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
         "Fortis Colosseum" -> "${n("Sol Heredit")} KC"
         "The Inferno" -> "${n("TzKal-Zuk")} KC"
         "Kree'arra" -> "${n("Kree'Arra")} KC"
+        "The Mad Angel" -> "${n("Mad Angel")} KC"
+        "Moons of Peril" -> "${n("Lunar Chests")} KC"
+        "The Nightmare" -> "${n("Nightmare")} KC"
+        "Royal Titans" -> "${n("The Royal Titans")} KC"
         "Callisto and Artio" -> "Callisto ${n("Callisto")} • Artio ${n("Artio")} KC"
         "Venenatis and Spindel" -> "Venenatis ${n("Venenatis")} • Spindel ${n("Spindel")} KC"
         "Vet'ion and Calvar'ion" -> "Vet'ion ${n("Vet'ion")} • Calvar'ion ${n("Calvar'ion")} KC"
@@ -125,6 +135,11 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
 }
 private fun expectedText(actual: Int, expected: Double) = if (expected <= 0) null else "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(actual / expected * 100).toInt()}% ${if (actual / expected < 1) "dry" else "spooned"}"
 val bludgeonPieces = setOf("Bludgeon spine", "Bludgeon claw", "Bludgeon axon")
+private val moonsGear = setOf(
+    "Eclipse moon chestplate", "Eclipse moon tassets", "Eclipse moon helm", "Eclipse atlatl",
+    "Blue moon chestplate", "Blue moon tassets", "Blue moon helm", "Blue moon spear",
+    "Blood moon chestplate", "Blood moon tassets", "Blood moon helm", "Dual macuahuitl"
+)
 
 fun uncollectedRateDescription(boss: String, item: String, kills: Map<String, Int>): String? {
     val expected = rateDescription(boss, item, 0, kills)?.substringBefore(" expected")?.toDoubleOrNull() ?: return null
@@ -184,6 +199,7 @@ fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>
         return expectedText(actual, (k[source] ?: 0) / denominator)
     }
     val kills = bossKills(boss, k)
+    if (boss == "Moons of Peril" && item in moonsGear) return expectedText(actual, kills / 224.0)
     if (boss == "Amoxliatl" && item == "Frozen tear") return expectedText(actual, kills * 5.55)
     if (boss == "Yama") {
         when (item) {
@@ -243,6 +259,7 @@ fun dropRateLabel(boss: String, item: String): String {
     }
     if (isSharedDt2Unique(boss, item)) return sharedSourceLabel(item)
     if (boss == "The Gauntlet") return when (item) { "Crystal armour seed", "Crystal weapon seed" -> "1 in 120 (normal) / 1 in 50 (corrupted)"; "Enhanced crystal weapon seed" -> "1 in 2,000 (normal) / 1 in 400 (corrupted)"; "Youngllef" -> "1 in 2,000 (normal) / 1 in 800 (corrupted)"; else -> "not mapped yet" }
+    if (boss == "Moons of Peril" && item in moonsGear) return "1 in 224 per Lunar chest"
     if (boss == "Amoxliatl" && item == "Frozen tear") return "5.55 per kill"
     if (boss == "Yama" && item == "Oathplate shards") return "12 per 17.07 kills"
     if (boss == "Yama" && item == "Chasm teleport scroll") return "24 per 95.11 kills"

@@ -26,6 +26,7 @@ val verifiedFallbackRates = """
     corporeal beast|holy elixir|170.67
     corporeal beast|jar of spirits|1000
     crazy archaeologist|fedora|128
+    crazy archaeologist|odium shard 2|256
     crazy archaeologist|malediction shard 2|256
     deranged archaeologist|steel ring|43.7
     doom of mokhaiotl|dom|1000
@@ -38,6 +39,7 @@ val verifiedFallbackRates = """
     fortis colosseum|echo crystal|12.4
     giant mole|baby mole|3000
     general graardor|pet general graardor|5000
+    glough's experiments|zenyte shard|300
     grotesque guardians|noon|3000
     grotesque guardians|black tourmaline core|500
     grotesque guardians|granite gloves|250
@@ -62,6 +64,7 @@ val verifiedFallbackRates = """
     nex|zaryte vambraces|172
     nex|torva full helm (damaged)|258
     nex|torva platelegs (damaged)|258
+    nex|nihil shard|10.08
     obor|hill giant club|118
     phantom muspah|muphin|2500
     royal titans|bran|3000
@@ -78,6 +81,7 @@ val verifiedFallbackRates = """
     skotizo|skotos|65
     skotizo|jar of darkness|200
     skotizo|dark claw|25
+    skotizo|ancient shard|1
     tempoross|tiny tempor|8000
     tempoross|big harpoonfish|1600
     thermonuclear smoke devil|pet smoke devil|3000

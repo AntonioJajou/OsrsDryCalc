@@ -73,7 +73,7 @@ private val excludedBossLogItems = setOf(
     "Ancient essence", "Charged ice", "Frozen cache", "Sunfire splinters",
     // DT2 tablet teleports are intentionally shown but excluded from dry calculations.
     "Frozen tablet", "Strangled tablet", "Scarred tablet", "Sirenic tablet",
-    "Atlatl dart", "Nihil shard", "Desiccated page", "Soaked page", "Spirit flakes",
+    "Atlatl dart", "Desiccated page", "Soaked page", "Spirit flakes",
     "Bruma torch", "Burnt page", "Zulrah's scales", "Huasca seed", "Hueycoatl hide",
     "Soiled page", "Dark totem", "Fire cape", "Infernal cape", "Gauntlet cape",
     "Pyromancer boots", "Pyromancer garb", "Pyromancer hood", "Pyromancer robe",

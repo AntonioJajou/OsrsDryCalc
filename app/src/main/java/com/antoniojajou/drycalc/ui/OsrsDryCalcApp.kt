@@ -18,48 +18,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.antoniojajou.drycalc.data.loadReport
 import com.antoniojajou.drycalc.model.*
 import com.antoniojajou.drycalc.rates.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.antoniojajou.drycalc.viewmodel.DryCalcViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URL
-import java.util.Locale
 
 @Composable
-fun OsrsDryCalcApp() {
-    var username by rememberSaveable { mutableStateOf("") }
-    var report by remember { mutableStateOf<Report?>(null) }
-    var status by remember { mutableStateOf("Tap Load boss rates to fetch your data.") }
-    var loading by remember { mutableStateOf(false) }
-    var selectedTab by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedItem by remember { mutableStateOf<ItemDetail?>(null) }
+fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var returnScrollIndex by rememberSaveable { mutableIntStateOf(0) }
     var returnScrollOffset by rememberSaveable { mutableIntStateOf(0) }
     var restoreScrollPosition by rememberSaveable { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    LaunchedEffect(selectedItem, restoreScrollPosition) {
-        if (selectedItem == null && restoreScrollPosition) {
+    LaunchedEffect(uiState.selectedItem, restoreScrollPosition) {
+        if (uiState.selectedItem == null && restoreScrollPosition) {
             listState.scrollToItem(returnScrollIndex, returnScrollOffset)
             restoreScrollPosition = false
-        }
-    }
-    val loadTab: (String) -> Unit = { tabName ->
-        if (username.trim().isEmpty()) status = "Enter a RuneScape username first."
-        else {
-            selectedTab = tabName; loading = true; report = null
-            status = "Loading ${tabName.lowercase()} kill counts and collection-log drops…"
-            scope.launch {
-                runCatching { withContext(Dispatchers.IO) { loadReport(username.trim(), tabName) } }
-                    .onSuccess { loaded ->
-                        report = loaded
-                        status = "${loaded.username} — ${loaded.tabName} log: ${loaded.obtained}/${loaded.total} unlocked\nCompletion: ${"%.1f".format(Locale.US, loaded.obtained * 100.0 / loaded.total)}%\n${loaded.accountRate}"
-                    }
-                    .onFailure { status = "Could not load RuneProfile data. Check your connection and try again.\n\n${it.message}" }
-                loading = false
-            }
         }
     }
     MaterialTheme(colorScheme = lightColorScheme(primary = Wood, secondary = Gold, background = Parchment, surface = Parchment)) {
@@ -67,29 +44,29 @@ fun OsrsDryCalcApp() {
             item {
                 Text("How Dry Am I?", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(16.dp))
-                OutlinedTextField(username, { username = it }, label = { Text("Enter OSRS Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
+                OutlinedTextField(uiState.username, viewModel::updateUsername, label = { Text("Enter OSRS Username") }, singleLine = true, modifier = Modifier.fillMaxWidth(), colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
                 Spacer(Modifier.height(12.dp))
             }
             when {
-                selectedItem != null -> item { ItemDetailsScreen(selectedItem!!, report?.kills.orEmpty()) { selectedItem = null } }
-                selectedTab == null -> item {
-                    Button(onClick = { loadTab("Bosses") }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Boss log") }
+                uiState.selectedItem != null -> item { ItemDetailsScreen(uiState.selectedItem!!, uiState.report?.kills.orEmpty(), viewModel::hideItem) }
+                uiState.selectedTab == null -> item {
+                    Button(onClick = { viewModel.loadTab("Bosses") }, enabled = !uiState.isLoading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Boss log") }
                     Spacer(Modifier.height(10.dp))
-                    Button(onClick = { loadTab("Raids") }, enabled = !loading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Raids log") }
-                    Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
+                    Button(onClick = { viewModel.loadTab("Raids") }, enabled = !uiState.isLoading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Raids log") }
+                    Spacer(Modifier.height(18.dp)); Text(uiState.status, color = Ink, fontSize = 15.sp)
                 }
                 else -> {
                     item {
-                        OutlinedButton({ selectedTab = null; report = null; status = "Choose Boss log or Raids log." }, Modifier.fillMaxWidth()) { Text("Back to log selection") }
-                        if (loading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
-                        Spacer(Modifier.height(18.dp)); Text(status, color = Ink, fontSize = 15.sp)
+                        OutlinedButton(viewModel::returnToLogSelection, Modifier.fillMaxWidth()) { Text("Back to log selection") }
+                        if (uiState.isLoading) { Spacer(Modifier.height(12.dp)); LinearProgressIndicator(Modifier.fillMaxWidth(), color = GoldDark) }
+                        Spacer(Modifier.height(18.dp)); Text(uiState.status, color = Ink, fontSize = 15.sp)
                     }
-                    report?.bosses?.forEach { boss -> item(key = boss.name) {
-                        BossCard(boss, report!!.kills) { detail ->
+                    uiState.report?.bosses?.forEach { boss -> item(key = boss.name) {
+                        BossCard(boss, uiState.report!!.kills) { detail ->
                             returnScrollIndex = listState.firstVisibleItemIndex
                             returnScrollOffset = listState.firstVisibleItemScrollOffset
                             restoreScrollPosition = true
-                            selectedItem = detail
+                            viewModel.showItem(detail)
                         }
                     } }
                 }
@@ -173,4 +150,4 @@ private fun itemDetailsDropRate(boss: String, item: String): String {
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFFF2E2BB)
-@Composable private fun OsrsDryCalcPreview() = OsrsDryCalcApp()
+@Composable private fun OsrsDryCalcPreview() = OsrsDryCalcApp(DryCalcViewModel())

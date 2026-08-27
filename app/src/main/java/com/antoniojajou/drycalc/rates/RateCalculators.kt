@@ -12,11 +12,46 @@ private fun sharedRateSources(item: String): Map<String, Double> = when (item) {
     "Draconic visage" -> mapOf("King Black Dragon" to 5000.0, "Vorkath" to 5000.0)
     "Dragon chainbody" -> mapOf("Kalphite Queen" to 128.0, "Thermonuclear Smoke Devil" to 2000.0)
     "Pet Chaos Elemental" -> mapOf("Chaos Elemental" to 300.0, "Chaos Fanatic" to 1000.0)
+    "Callisto cub" -> mapOf("Callisto" to 2000.0, "Artio" to 2800.0)
+    "Tyrannical ring" -> mapOf("Callisto" to 512.0, "Artio" to 716.0)
+    "Claws of Callisto" -> mapOf("Callisto" to 196.0, "Artio" to 618.0)
+    "Voidwaker hilt" -> mapOf("Callisto" to 360.0, "Artio" to 912.0)
+    "Venenatis spiderling" -> mapOf("Venenatis" to 1500.0, "Spindel" to 2800.0)
+    "Treasonous ring" -> mapOf("Venenatis" to 512.0, "Spindel" to 716.0)
+    "Fangs of Venenatis" -> mapOf("Venenatis" to 196.0, "Spindel" to 618.0)
+    "Voidwaker gem" -> mapOf("Venenatis" to 360.0, "Spindel" to 912.0)
+    "Vet'ion jr." -> mapOf("Vet'ion" to 2000.0, "Calvar'ion" to 2800.0)
+    "Ring of the gods" -> mapOf("Vet'ion" to 512.0, "Calvar'ion" to 716.0)
+    "Skull of Vet'ion" -> mapOf("Vet'ion" to 196.0, "Calvar'ion" to 618.0)
+    "Voidwaker blade" -> mapOf("Vet'ion" to 360.0, "Calvar'ion" to 912.0)
+    "Dragon pickaxe" -> mapOf(
+        "Callisto" to 256.0, "Artio" to 358.0, "Venenatis" to 256.0, "Spindel" to 358.0,
+        "Vet'ion" to 256.0, "Calvar'ion" to 358.0, "Chaos Elemental" to 256.0,
+        "King Black Dragon" to 1000.0, "Kalphite Queen" to 400.0
+    )
+    "Dragon 2h sword" -> mapOf(
+        "Callisto" to 256.0, "Artio" to 358.0, "Venenatis" to 256.0, "Spindel" to 358.0,
+        "Vet'ion" to 256.0, "Calvar'ion" to 358.0, "Chaos Elemental" to 64.0,
+        "Kalphite Queen" to 256.0, "Scorpia" to 128.0
+    )
     else -> emptyMap()
 }
 
+private fun sourceNamesForBoss(boss: String): List<String> =
+    wildernessBossSources[boss] ?: listOf(if (boss == "Kree'arra") "Kree'Arra" else boss)
+
 private fun isSharedDt2Unique(boss: String, item: String): Boolean =
-    sharedRateSources(item).containsKey(if (boss == "Kree'arra") "Kree'Arra" else boss)
+    sourceNamesForBoss(boss).any { source -> sharedRateSources(item).containsKey(source) }
+
+private fun sharedSourceLabel(item: String): String {
+    val sources = sharedRateSources(item)
+    val dt2Bosses = setOf("Duke Sucellus", "Vardorvis", "The Leviathan", "The Whisperer")
+    if (sources.keys == dt2Bosses) return "DT2 weighted (4 bosses)"
+    if (sources.size > 2) return "${sources.size}-boss weighted"
+    return sources.entries.joinToString(" • ") { (source, rate) ->
+        "$source 1 in ${String.format(Locale.US, "%,.0f", rate)}"
+    }
+}
 
 private fun sharedDt2Rate(item: String, actual: Int, kills: Map<String, Int>): String {
     val rates = sharedRateSources(item)
@@ -36,6 +71,8 @@ private val excludedBossLogItems = setOf(
     "Araxyte venom sac", "Coagulated venom", "Bolt rack", "Key master teleport",
     "Immaculate mole skin", "Mole claw", "Mole skin", "Granite dust",
     "Ancient essence", "Charged ice", "Frozen cache", "Sunfire splinters",
+    // DT2 tablet teleports are intentionally shown but excluded from dry calculations.
+    "Frozen tablet", "Strangled tablet", "Scarred tablet", "Sirenic tablet",
     "Atlatl dart", "Nihil shard", "Desiccated page", "Soaked page", "Spirit flakes",
     "Bruma torch", "Burnt page", "Zulrah's scales", "Huasca seed", "Hueycoatl hide",
     "Soiled page", "Dark totem", "Fire cape", "Infernal cape", "Gauntlet cape",
@@ -57,6 +94,25 @@ private val sharedWithSlayerLogItems = setOf(
 fun isSharedWithSlayerMonster(item: String) = item in sharedWithSlayerLogItems
 fun isExcludedFromRateCalculation(item: String) =
     item in excludedBossLogItems || item in sharedWithSlayerLogItems
+
+// RuneProfile combines each of these Wilderness boss pairs into one collection log.
+// The official HiScores expose separate KC entries, so absent entries count as zero.
+private val wildernessBossSources = mapOf(
+    "Callisto and Artio" to listOf("Callisto", "Artio"),
+    "Venenatis and Spindel" to listOf("Venenatis", "Spindel"),
+    "Vet'ion and Calvar'ion" to listOf("Vet'ion", "Calvar'ion")
+)
+
+private fun bossKills(boss: String, k: Map<String, Int>): Int = when (boss) {
+    "Kree'arra" -> k["Kree'Arra"] ?: 0
+    "The Gauntlet" -> (k["The Gauntlet"] ?: 0) + (k["The Corrupted Gauntlet"] ?: 0)
+    "The Mad Angel" -> k["Mad Angel"] ?: 0
+    "Moons of Peril" -> k["Lunar Chests"] ?: 0
+    "The Nightmare" -> k["Nightmare"] ?: 0
+    "Royal Titans" -> k["The Royal Titans"] ?: 0
+    else -> wildernessBossSources[boss]?.sumOf { source -> k[source] ?: 0 } ?: (k[boss] ?: 0)
+}
+
 fun collectionKills(boss: String, k: Map<String, Int>): String {
     fun n(name: String) = String.format(Locale.US, "%,d", k[name] ?: 0)
     return when (boss) {
@@ -66,6 +122,13 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
         "Fortis Colosseum" -> "${n("Sol Heredit")} KC"
         "The Inferno" -> "${n("TzKal-Zuk")} KC"
         "Kree'arra" -> "${n("Kree'Arra")} KC"
+        "The Mad Angel" -> "${n("Mad Angel")} KC"
+        "Moons of Peril" -> "${n("Lunar Chests")} KC"
+        "The Nightmare" -> "${n("Nightmare")} KC"
+        "Royal Titans" -> "${n("The Royal Titans")} KC"
+        "Callisto and Artio" -> "Callisto ${n("Callisto")} • Artio ${n("Artio")} KC"
+        "Venenatis and Spindel" -> "Venenatis ${n("Venenatis")} • Spindel ${n("Spindel")} KC"
+        "Vet'ion and Calvar'ion" -> "Vet'ion ${n("Vet'ion")} • Calvar'ion ${n("Calvar'ion")} KC"
         "Chambers of Xeric" -> "Regular ${n("Chambers of Xeric")} • Challenge ${n("Chambers of Xeric: Challenge Mode")} KC"
         "Theatre of Blood" -> "${n("Theatre of Blood")} KC"
         "Tombs of Amascut" -> "${n("Tombs of Amascut")} KC"
@@ -74,6 +137,11 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
 }
 private fun expectedText(actual: Int, expected: Double) = if (expected <= 0) null else "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(actual / expected * 100).toInt()}% ${if (actual / expected < 1) "dry" else "spooned"}"
 val bludgeonPieces = setOf("Bludgeon spine", "Bludgeon claw", "Bludgeon axon")
+private val moonsGear = setOf(
+    "Eclipse moon chestplate", "Eclipse moon tassets", "Eclipse moon helm", "Eclipse atlatl",
+    "Blue moon chestplate", "Blue moon tassets", "Blue moon helm", "Blue moon spear",
+    "Blood moon chestplate", "Blood moon tassets", "Blood moon helm", "Dual macuahuitl"
+)
 
 fun uncollectedRateDescription(boss: String, item: String, kills: Map<String, Int>): String? {
     val expected = rateDescription(boss, item, 0, kills)?.substringBefore(" expected")?.toDoubleOrNull() ?: return null
@@ -135,7 +203,8 @@ fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>
         val denominator = if (item.startsWith("Pet Dagannoth")) 5000.0 else 128.0
         return expectedText(actual, (k[source] ?: 0) / denominator)
     }
-    val kills = k[if (boss == "Kree'arra") "Kree'Arra" else boss] ?: 0
+    val kills = bossKills(boss, k)
+    if (boss == "Moons of Peril" && item in moonsGear) return expectedText(actual, kills / 224.0)
     if (boss == "Amoxliatl" && item == "Frozen tear") return expectedText(actual, kills * 5.55)
     if (boss == "Yama") {
         when (item) {
@@ -143,7 +212,7 @@ fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>
             "Chasm teleport scroll" -> return expectedText(actual, kills * 24.0 / 95.11)
         }
     }
-    if (boss == "The Gauntlet") { val expected = when (item) { "Crystal armour seed", "Crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 120.0 + (k["The Corrupted Gauntlet"] ?: 0) / 50.0; "Enhanced crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 2000.0 + (k["The Corrupted Gauntlet"] ?: 0) / 400.0; else -> 0.0 }; return expectedText(actual, expected) }
+    if (boss == "The Gauntlet") { val expected = when (item) { "Crystal armour seed", "Crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 120.0 + (k["The Corrupted Gauntlet"] ?: 0) / 50.0; "Enhanced crystal weapon seed" -> (k["The Gauntlet"] ?: 0) / 2000.0 + (k["The Corrupted Gauntlet"] ?: 0) / 400.0; "Youngllef" -> (k["The Gauntlet"] ?: 0) / 2000.0 + (k["The Corrupted Gauntlet"] ?: 0) / 800.0; else -> 0.0 }; return expectedText(actual, expected) }
     val d = when (boss) {
         "Abyssal Sire" -> when (item) {
             "Unsired" -> 100.0
@@ -194,8 +263,9 @@ fun dropRateLabel(boss: String, item: String): String {
         item == "Dragon axe" -> "Dry rate unavailable — source-specific KC required"
         else -> "not mapped yet"
     }
-    if (isSharedDt2Unique(boss, item)) return "combined across all source bosses"
-    if (boss == "The Gauntlet") return when (item) { "Crystal armour seed", "Crystal weapon seed" -> "1 in 120 (normal) / 1 in 50 (corrupted)"; "Enhanced crystal weapon seed" -> "1 in 2,000 (normal) / 1 in 400 (corrupted)"; else -> "not mapped yet" }
+    if (isSharedDt2Unique(boss, item)) return sharedSourceLabel(item)
+    if (boss == "The Gauntlet") return when (item) { "Crystal armour seed", "Crystal weapon seed" -> "1 in 120 (normal) / 1 in 50 (corrupted)"; "Enhanced crystal weapon seed" -> "1 in 2,000 (normal) / 1 in 400 (corrupted)"; "Youngllef" -> "1 in 2,000 (normal) / 1 in 800 (corrupted)"; else -> "not mapped yet" }
+    if (boss == "Moons of Peril" && item in moonsGear) return "1 in 224 per Lunar chest"
     if (boss == "Amoxliatl" && item == "Frozen tear") return "5.55 per kill"
     if (boss == "Yama" && item == "Oathplate shards") return "12 per 17.07 kills"
     if (boss == "Yama" && item == "Chasm teleport scroll") return "24 per 95.11 kills"
@@ -235,7 +305,7 @@ fun bossSummary(b: BossLog, k: Map<String, Int>): String? {
     if (b.name == "Chambers of Xeric") return coxSummary(b.items, k)
     var weightedRate = 0.0
     var totalWeight = 0.0
-    val kills = when (b.name) { "Kree'arra" -> k["Kree'Arra"] ?: 0; "The Gauntlet" -> (k["The Gauntlet"] ?: 0) + (k["The Corrupted Gauntlet"] ?: 0); else -> k[b.name] ?: 0 }
+    val kills = bossKills(b.name, k)
     b.items.filter { shouldIncludeInWeightedRate(b.name, it, k) }.forEach { item ->
         val expected = rateDescription(b.name, item.name, item.quantity, k)?.substringBefore(" expected")?.toDoubleOrNull() ?: return@forEach
         if (expected <= 0 || kills <= 0) return@forEach
@@ -274,11 +344,7 @@ fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
         boss.items.filter { shouldIncludeInWeightedRate(boss.name, it, k) }.forEach itemLoop@ { item ->
             val expected = rateDescription(boss.name, item.name, item.quantity, k)
                 ?.substringBefore(" expected")?.toDoubleOrNull() ?: return@itemLoop
-            val kills = when (boss.name) {
-                "Kree'arra" -> k["Kree'Arra"] ?: 0
-                "The Gauntlet" -> (k["The Gauntlet"] ?: 0) + (k["The Corrupted Gauntlet"] ?: 0)
-                else -> k[boss.name] ?: 0
-            }
+            val kills = bossKills(boss.name, k)
             if (expected <= 0 || kills <= 0) return@itemLoop
             val rarityWeight = kills / expected
             weightedRate += (item.quantity / expected) * rarityWeight

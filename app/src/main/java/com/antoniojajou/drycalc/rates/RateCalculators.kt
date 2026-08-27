@@ -97,6 +97,9 @@ fun coxItemWeight(item: String): CoxWeight? = when (item) {
 private fun coxExpected(item: String, k: Map<String, Int>): Double? {
     if (item in setOf("Uncut onyx", "Onyx")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) / 400.0
     if (item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit")) return (k["Chambers of Xeric: Challenge Mode"] ?: 0) / 75.0
+    // Challenge Mode completion times are not available from official HiScores.
+    // Treat every recorded CM completion as eligible for the Metamorphic dust roll.
+    if (item == "Metamorphic dust") return (k["Chambers of Xeric: Challenge Mode"] ?: 0) / 400.0
     if (item in setOf("Torn prayer scroll", "Dark relic")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) * 2.0 / 33.0
     val weight = coxItemWeight(item) ?: return null
     val regularPoints = (k["Chambers of Xeric"] ?: 0) * 49_750.0
@@ -176,6 +179,7 @@ fun dropRateLabel(boss: String, item: String): String {
         coxItemWeight(item) != null -> "weighted Ancient chest unique rate"
         item in setOf("Uncut onyx", "Onyx") -> "1 in 400 per completion"
         item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit") -> "1 in 75 per Challenge Mode completion"
+        item == "Metamorphic dust" -> "1 in 400 per eligible Challenge Mode completion"
         item in setOf("Torn prayer scroll", "Dark relic") -> "1 in 16.5 per completion"
         else -> "Dry rate unavailable"
     }

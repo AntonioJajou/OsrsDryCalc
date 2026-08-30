@@ -4,6 +4,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -15,12 +16,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.antoniojajou.drycalc.model.*
 import com.antoniojajou.drycalc.rates.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.antoniojajou.drycalc.viewmodel.DryCalcUiState
 import com.antoniojajou.drycalc.viewmodel.DryCalcViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,7 +51,7 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 Spacer(Modifier.height(12.dp))
             }
             when {
-                uiState.selectedItem != null -> item { ItemDetailsScreen(uiState.selectedItem!!, uiState.report?.kills.orEmpty(), viewModel::hideItem) }
+                uiState.selectedItem != null -> item { ItemDetailsScreen(uiState.selectedItem!!, uiState.report?.kills.orEmpty(), uiState.report?.toaAverages ?: ToaAverages(), viewModel::hideItem) }
                 uiState.selectedTab == null -> item {
                     Button(onClick = { viewModel.loadTab("Bosses") }, enabled = !uiState.isLoading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Boss log") }
                     Spacer(Modifier.height(10.dp))
@@ -62,7 +65,7 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                         Spacer(Modifier.height(18.dp)); Text(uiState.status, color = Ink, fontSize = 15.sp)
                     }
                     uiState.report?.bosses?.forEach { boss -> item(key = boss.name) {
-                        BossCard(boss, uiState.report!!.kills) { detail ->
+                        BossCard(boss, uiState.report!!.kills, uiState.report!!.toaAverages, uiState, viewModel) { detail ->
                             returnScrollIndex = listState.firstVisibleItemIndex
                             returnScrollOffset = listState.firstVisibleItemScrollOffset
                             restoreScrollPosition = true
@@ -76,7 +79,32 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
     }
 }
 
-@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, onItemClick: (ItemDetail) -> Unit) {
+@Composable private fun ToaAverageInputs(state: DryCalcUiState, viewModel: DryCalcViewModel) {
+    Spacer(Modifier.height(10.dp))
+    Text("Average personal Tombs points and raid level", color = Ink, fontSize = 14.sp)
+    Spacer(Modifier.height(6.dp))
+    Text("Normal / Entry", color = GoldDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ToaNumberField(state.normalToaPoints, viewModel::updateNormalToaPoints, "Points", Modifier.weight(1f))
+        ToaNumberField(state.normalToaLevel, viewModel::updateNormalToaLevel, "Raid level", Modifier.weight(1f))
+    }
+    Spacer(Modifier.height(6.dp))
+    Text("Expert", color = GoldDark, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ToaNumberField(state.expertToaPoints, viewModel::updateExpertToaPoints, "Points", Modifier.weight(1f))
+        ToaNumberField(state.expertToaLevel, viewModel::updateExpertToaLevel, "Raid level", Modifier.weight(1f))
+    }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(viewModel::applyToaAverages, Modifier.fillMaxWidth()) { Text("Apply Tombs averages") }
+}
+
+@Composable private fun ToaNumberField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier) {
+    OutlinedTextField(value, onValueChange, label = { Text(label) }, singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = modifier,
+        colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
+}
+
+@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, toaAverages: ToaAverages, uiState: DryCalcUiState, viewModel: DryCalcViewModel, onItemClick: (ItemDetail) -> Unit) {
     var expanded by rememberSaveable(boss.name) { mutableStateOf(false) }
     if (boss.items.isEmpty()) return
     val cardColor = if (boss.items.all { it.quantity > 0 }) CompletedParchment else Parchment
@@ -87,16 +115,19 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 Column(Modifier.weight(1f)) {
                     Text("${boss.name} — ${collectionKills(boss.name, kills)}", color = GoldDark, fontSize = 19.sp, fontWeight = FontWeight.Bold)
                     if (boss.name == "Chambers of Xeric") Text("Assumed points per completion: Regular 49,750 • Challenge 66,400", color = Ink, fontSize = 13.sp)
-                    bossSummary(boss, kills)?.let { Text(it, color = Ink, fontSize = 14.sp) }
+                    bossSummary(boss, kills, toaAverages)?.let { Text(it, color = Ink, fontSize = 14.sp) }
                 }
                 Text(if (expanded) "⌃" else "⌄", color = GoldDark, fontSize = 30.sp)
             }
-            if (expanded) boss.items.forEach { item -> ItemRow(boss.name, item, kills) { onItemClick(ItemDetail(boss.name, it)) } }
+            if (expanded) {
+                if (boss.name == "Tombs of Amascut") ToaAverageInputs(uiState, viewModel)
+                boss.items.forEach { item -> ItemRow(boss.name, item, kills, toaAverages) { onItemClick(ItemDetail(boss.name, it)) } }
+            }
         }
     }
 }
 
-@Composable private fun ItemRow(boss: String, item: LogItem, kills: Map<String, Int>, onItemClick: (LogItem) -> Unit) {
+@Composable private fun ItemRow(boss: String, item: LogItem, kills: Map<String, Int>, toaAverages: ToaAverages, onItemClick: (LogItem) -> Unit) {
     val bitmap by produceState<android.graphics.Bitmap?>(null, item.id) { value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeStream(URL("https://cdn.runeprofile.com/item/${item.id}.png").openStream()) }.getOrNull() } }
     val obtained = item.quantity > 0
     val showDropRate = !(boss == "Chambers of Xeric" && coxItemWeight(item.name) != null)
@@ -108,18 +139,18 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 val rateLabel = dropRateLabel(boss, item.name)
                 Text(if (isExcludedFromRateCalculation(item.name)) rateLabel else "Expected drop rate: $rateLabel", color = Ink, fontSize = 14.sp)
             }
-            val rate = if (obtained) rateDescription(boss, item.name, item.quantity, kills) else uncollectedRateDescription(boss, item.name, kills)
+            val rate = if (obtained) rateDescription(boss, item.name, item.quantity, kills, toaAverages) else uncollectedRateDescription(boss, item.name, kills, toaAverages)
             rate?.let { Text("Rate: $it", color = Ink, fontSize = 14.sp) }
         }
         Spacer(Modifier.weight(1f)); Text("›", color = GoldDark, fontSize = 28.sp)
     }
 }
 
-@Composable private fun ItemDetailsScreen(detail: ItemDetail, kills: Map<String, Int>, onBack: () -> Unit) {
+@Composable private fun ItemDetailsScreen(detail: ItemDetail, kills: Map<String, Int>, toaAverages: ToaAverages, onBack: () -> Unit) {
     val item = detail.item
     val bitmap by produceState<android.graphics.Bitmap?>(null, item.id) { value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeStream(URL("https://cdn.runeprofile.com/item/${item.id}.png").openStream()) }.getOrNull() } }
     val obtained = item.quantity > 0
-    val calculatedRate = if (obtained) rateDescription(detail.boss, item.name, item.quantity, kills) else uncollectedRateDescription(detail.boss, item.name, kills)
+    val calculatedRate = if (obtained) rateDescription(detail.boss, item.name, item.quantity, kills, toaAverages) else uncollectedRateDescription(detail.boss, item.name, kills, toaAverages)
     Column(Modifier.fillMaxWidth()) {
         OutlinedButton(onBack, Modifier.fillMaxWidth()) { Text("Back to ${detail.boss}") }
         Spacer(Modifier.height(20.dp)); Text("Item details", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp))

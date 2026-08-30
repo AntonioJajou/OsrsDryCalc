@@ -3,6 +3,7 @@ package com.antoniojajou.drycalc.data
 import com.antoniojajou.drycalc.model.BossLog
 import com.antoniojajou.drycalc.model.LogItem
 import com.antoniojajou.drycalc.model.Report
+import com.antoniojajou.drycalc.model.ToaAverages
 import com.antoniojajou.drycalc.rates.accountSummary
 import com.antoniojajou.drycalc.rates.raidsSummary
 import org.json.JSONObject
@@ -10,7 +11,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
 
-fun loadReport(username: String, tabName: String): Report {
+fun loadReport(username: String, tabName: String, toaAverages: ToaAverages = ToaAverages()): Report {
     val encoded = URLEncoder.encode(username, "UTF-8").replace("+", "%20")
     val account = JSONObject(fetch("https://api.runeprofile.com/v1/accounts/$encoded/full"))
     val hiscores = JSONObject(fetch("https://secure.runescape.com/m=hiscore_oldschool/index_lite.json?player=$encoded"))
@@ -29,8 +30,8 @@ fun loadReport(username: String, tabName: String): Report {
             }
         }
     }
-    val summary = if (tabName == "Bosses") accountSummary(bosses, kills) else raidsSummary(bosses, kills)
-    return Report(account.getString("username"), tabName, tab.getInt("obtained"), tab.getInt("total"), summary, bosses, kills)
+    val summary = if (tabName == "Bosses") accountSummary(bosses, kills) else raidsSummary(bosses, kills, toaAverages)
+    return Report(account.getString("username"), tabName, tab.getInt("obtained"), tab.getInt("total"), summary, bosses, kills, toaAverages)
 }
 
 private fun fetch(url: String): String {

@@ -28,6 +28,7 @@ import com.antoniojajou.drycalc.viewmodel.DryCalcViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
+import java.util.Locale
 
 @Composable
 fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
@@ -165,7 +166,7 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 }
                 Spacer(Modifier.height(18.dp)); Text("Collection log: ${detail.boss}", color = Ink, fontSize = 16.sp)
                 Text("Kill count: ${collectionKills(detail.boss, kills)}", color = Ink, fontSize = 16.sp)
-                if (detail.boss == "Chambers of Xeric") Text("Assumed points: 49,750 regular • 66,400 Challenge", color = Ink, fontSize = 16.sp)
+                if (detail.boss == "Chambers of Xeric") Text("Average points: ${formatPoints(coxPoints.regular)} regular • ${formatPoints(coxPoints.challenge)} Challenge", color = Ink, fontSize = 16.sp)
                 Spacer(Modifier.height(12.dp))
                 val dropRate = itemDetailsDropRate(detail.boss, item.name)
                 Text(if (isExcludedFromRateCalculation(item.name)) dropRate else "Expected drop rate: $dropRate", color = Ink, fontSize = 16.sp)
@@ -179,6 +180,8 @@ private fun itemDetailsDropRate(boss: String, item: String): String {
     if (boss == "Chambers of Xeric") coxItemWeight(item)?.let { return "Normal ${it.normal}/60 unique table • Challenge ${it.challenge}/56 unique table" }
     return dropRateLabel(boss, item)
 }
+
+private fun formatPoints(points: Double) = String.format(Locale.US, "%,.0f", points)
 
 @Preview(showBackground = true, backgroundColor = 0xFFF2E2BB)
 @Composable private fun OsrsDryCalcPreview() = OsrsDryCalcApp(DryCalcViewModel())

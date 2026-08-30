@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.antoniojajou.drycalc.data.loadReport
 import com.antoniojajou.drycalc.model.ItemDetail
+import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.Report
 import com.antoniojajou.drycalc.model.ToaAverages
 import com.antoniojajou.drycalc.rates.raidsSummary

@@ -1,6 +1,7 @@
 package com.antoniojajou.drycalc.data
 
 import com.antoniojajou.drycalc.model.BossLog
+import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.LogItem
 import com.antoniojajou.drycalc.model.Report
 import com.antoniojajou.drycalc.model.ToaAverages

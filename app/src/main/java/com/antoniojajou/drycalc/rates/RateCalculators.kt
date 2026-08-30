@@ -1,6 +1,7 @@
 package com.antoniojajou.drycalc.rates
 
 import com.antoniojajou.drycalc.model.BossLog
+import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.LogItem
 import com.antoniojajou.drycalc.model.ToaAverages
 import java.util.Locale
@@ -163,7 +164,7 @@ fun coxItemWeight(item: String): CoxWeight? = when (item) {
     "Elder maul", "Kodai insignia", "Twisted bow" -> CoxWeight(normal = 2, challenge = 2)
     else -> null
 }
-private fun coxExpected(item: String, k: Map<String, Int>): Double? {
+private fun coxExpected(item: String, k: Map<String, Int>, points: CoxPointAverages): Double? {
     if (item in setOf("Uncut onyx", "Onyx")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) / 400.0
     if (item in setOf("Twisted ancestral colour kit", "Twisted ancestral color kit", "Twisted kit")) return (k["Chambers of Xeric: Challenge Mode"] ?: 0) / 75.0
     // Challenge Mode completion times are not available from official HiScores.
@@ -171,13 +172,13 @@ private fun coxExpected(item: String, k: Map<String, Int>): Double? {
     if (item == "Metamorphic dust") return (k["Chambers of Xeric: Challenge Mode"] ?: 0) / 400.0
     if (item in setOf("Torn prayer scroll", "Dark relic")) return ((k["Chambers of Xeric"] ?: 0) + (k["Chambers of Xeric: Challenge Mode"] ?: 0)) * 2.0 / 33.0
     val weight = coxItemWeight(item) ?: return null
-    val regularPoints = (k["Chambers of Xeric"] ?: 0) * 49_750.0
-    val challengePoints = (k["Chambers of Xeric: Challenge Mode"] ?: 0) * 66_400.0
+    val regularPoints = (k["Chambers of Xeric"] ?: 0) * points.regular
+    val challengePoints = (k["Chambers of Xeric: Challenge Mode"] ?: 0) * points.challenge
     return regularPoints / 867_600.0 * weight.normal / 60.0 +
         challengePoints / 867_600.0 * weight.challenge / 56.0
 }
-private fun coxRateDescription(item: String, actual: Int, k: Map<String, Int>): String? {
-    val expected = coxExpected(item, k) ?: return null
+private fun coxRateDescription(item: String, actual: Int, k: Map<String, Int>, points: CoxPointAverages): String? {
+    val expected = coxExpected(item, k, points) ?: return null
     return expectedText(actual, expected)
 }
 
@@ -371,8 +372,8 @@ fun bossSummary(b: BossLog, k: Map<String, Int>, toaAverages: ToaAverages = ToaA
     var weightedRate = 0.0
     var totalWeight = 0.0
     val kills = bossKills(b.name, k)
-    b.items.filter { shouldIncludeInWeightedRate(b.name, it, k) }.forEach { item ->
-        val expected = rateDescription(b.name, item.name, item.quantity, k)?.substringBefore(" expected")?.toDoubleOrNull() ?: return@forEach
+    b.items.filter { shouldIncludeInWeightedRate(b.name, it, k, coxPoints) }.forEach { item ->
+        val expected = rateDescription(b.name, item.name, item.quantity, k, coxPoints)?.substringBefore(" expected")?.toDoubleOrNull() ?: return@forEach
         if (expected <= 0 || kills <= 0) return@forEach
         val weight = kills / expected
         weightedRate += (item.quantity / expected) * weight
@@ -399,8 +400,8 @@ private fun toaSummary(items: List<LogItem>, kills: Map<String, Int>, averages: 
 private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String? {
     var weightedRate = 0.0
     var totalWeight = 0.0
-    items.filter { shouldIncludeInWeightedRate("Chambers of Xeric", it, k) }.forEach { item ->
-        val expected = coxExpected(item.name, k) ?: return@forEach
+    items.filter { shouldIncludeInWeightedRate("Chambers of Xeric", it, k, points) }.forEach { item ->
+        val expected = coxExpected(item.name, k, points) ?: return@forEach
         if (expected <= 0) return@forEach
         val rarityWeight = 1.0 / expected
         weightedRate += (item.quantity / expected) * rarityWeight
@@ -417,12 +418,12 @@ fun raidsSummary(bosses: List<BossLog>, k: Map<String, Int>, toaAverages: ToaAve
     val toaSummary = toa?.let { toaSummary(it.items, k, toaAverages)?.replace("Weighted total", "Tombs mapped rate") }
     return listOfNotNull(chambersSummary, toaSummary).joinToString("\n").ifEmpty { "Mapped weighted rate: no raid data available" }
 }
-fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>): String {
+fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String {
     var weightedRate = 0.0
     var totalWeight = 0.0
     bosses.forEach { boss ->
-        boss.items.filter { shouldIncludeInWeightedRate(boss.name, it, k) }.forEach itemLoop@ { item ->
-            val expected = rateDescription(boss.name, item.name, item.quantity, k)
+        boss.items.filter { shouldIncludeInWeightedRate(boss.name, it, k, coxPoints) }.forEach itemLoop@ { item ->
+            val expected = rateDescription(boss.name, item.name, item.quantity, k, coxPoints)
                 ?.substringBefore(" expected")?.toDoubleOrNull() ?: return@itemLoop
             val kills = bossKills(boss.name, k)
             if (expected <= 0 || kills <= 0) return@itemLoop

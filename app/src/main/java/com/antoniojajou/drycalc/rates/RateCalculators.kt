@@ -3,6 +3,7 @@ package com.antoniojajou.drycalc.rates
 import com.antoniojajou.drycalc.model.BossLog
 import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.LogItem
+import com.antoniojajou.drycalc.model.ToaAverages
 import java.util.Locale
 
 private fun sharedRateSources(item: String): Map<String, Double> = when (item) {
@@ -132,7 +133,7 @@ fun collectionKills(boss: String, k: Map<String, Int>): String {
         "Vet'ion and Calvar'ion" -> "Vet'ion ${n("Vet'ion")} • Calvar'ion ${n("Calvar'ion")} KC"
         "Chambers of Xeric" -> "Regular ${n("Chambers of Xeric")} • Challenge ${n("Chambers of Xeric: Challenge Mode")} KC"
         "Theatre of Blood" -> "${n("Theatre of Blood")} KC"
-        "Tombs of Amascut" -> "${n("Tombs of Amascut")} KC"
+        "Tombs of Amascut" -> "Normal ${n("Tombs of Amascut")} • Expert ${n("Tombs of Amascut: Expert Mode")} KC"
         else -> k[boss]?.let { "${n(boss)} KC" } ?: "KC not available in official HiScores"
     }
 }
@@ -144,8 +145,8 @@ private val moonsGear = setOf(
     "Blood moon chestplate", "Blood moon tassets", "Blood moon helm", "Dual macuahuitl"
 )
 
-fun uncollectedRateDescription(boss: String, item: String, kills: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String? {
-    val expected = rateDescription(boss, item, 0, kills, coxPoints)?.substringBefore(" expected")?.toDoubleOrNull() ?: return null
+fun uncollectedRateDescription(boss: String, item: String, kills: Map<String, Int>, toaAverages: ToaAverages = ToaAverages()): String? {
+    val expected = rateDescription(boss, item, 0, kills, toaAverages)?.substringBefore(" expected")?.toDoubleOrNull() ?: return null
     if (expected < 1.0) return "${"%.2f".format(Locale.US, expected)} expected • Haven't hit rate yet"
     return "${"%.2f".format(Locale.US, expected)} expected • ${kotlin.math.round(expected * 100).toInt()}% dry"
 }
@@ -180,18 +181,77 @@ private fun coxRateDescription(item: String, actual: Int, k: Map<String, Int>, p
     val expected = coxExpected(item, k, points) ?: return null
     return expectedText(actual, expected)
 }
-private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<String, Int>, coxPoints: CoxPointAverages): Boolean {
+
+private data class ToaWeights(val fang: Double, val lightbearer: Double, val ward: Double, val masori: Double, val shadow: Double)
+private val toaWeightStops = listOf(
+    150.0 to ToaWeights(1.0 / 3.43, 1.0 / 3.43, 1.0 / 8.0, 1.0 / 12.0, 1.0 / 24.0),
+    350.0 to ToaWeights(1.0 / 3.67, 1.0 / 3.67, 1.0 / 7.33, 1.0 / 11.0, 1.0 / 22.0),
+    400.0 to ToaWeights(1.0 / 4.75, 1.0 / 3.8, 1.0 / 6.33, 1.0 / 9.5, 1.0 / 19.0),
+    450.0 to ToaWeights(1.0 / 4.5, 1.0 / 4.5, 1.0 / 6.0, 1.0 / 9.0, 1.0 / 18.0),
+    500.0 to ToaWeights(1.0 / 5.5, 1.0 / 4.71, 1.0 / 5.5, 1.0 / 8.25, 1.0 / 16.5)
+)
+
+private fun toaScaledLevel(level: Double) = when {
+    level <= 310.0 -> level
+    level <= 430.0 -> 310.0 + (level - 310.0) / 3.0
+    else -> 350.0 + (level - 430.0) / 6.0
+}
+private fun lerp(start: Double, end: Double, progress: Double) = start + (end - start) * progress
+private fun toaWeights(level: Double): ToaWeights {
+    val clamped = level.coerceIn(150.0, 500.0)
+    val (lowerLevel, lower) = toaWeightStops.last { it.first <= clamped }
+    val upper = toaWeightStops.firstOrNull { it.first > clamped } ?: return lower
+    val progress = (clamped - lowerLevel) / (upper.first - lowerLevel)
+    return ToaWeights(
+        lerp(lower.fang, upper.second.fang, progress), lerp(lower.lightbearer, upper.second.lightbearer, progress),
+        lerp(lower.ward, upper.second.ward, progress), lerp(lower.masori, upper.second.masori, progress), lerp(lower.shadow, upper.second.shadow, progress)
+    )
+}
+private fun toaItemWeight(item: String, level: Double): Double? {
+    val weights = toaWeights(level)
+    val base = when (item) {
+        "Osmumten's fang" -> weights.fang
+        "Lightbearer" -> weights.lightbearer
+        "Elidinis' ward" -> weights.ward
+        "Masori mask", "Masori body", "Masori chaps" -> weights.masori
+        "Tumeken's shadow (uncharged)" -> weights.shadow
+        else -> return null
+    }
+    val requiredLevel = if (item in setOf("Osmumten's fang", "Lightbearer")) 50.0 else 150.0
+    return if (level < requiredLevel) base / 50.0 else base
+}
+private fun toaPurpleChance(points: Double, level: Double): Double {
+    val denominator = 10_500.0 - 20.0 * toaScaledLevel(level)
+    return (points / denominator / 100.0).coerceAtMost(0.55)
+}
+private fun toaExpected(item: String, kills: Map<String, Int>, averages: ToaAverages): Double? {
+    val normalKills = kills["Tombs of Amascut"] ?: 0
+    val expertKills = kills["Tombs of Amascut: Expert Mode"] ?: 0
+    val normal = if (normalKills == 0) 0.0 else {
+        if (averages.normalPoints <= 0 || averages.normalLevel <= 0) return null
+        normalKills * toaPurpleChance(averages.normalPoints, averages.normalLevel) * (toaItemWeight(item, averages.normalLevel) ?: return null)
+    }
+    val expert = if (expertKills == 0) 0.0 else {
+        if (averages.expertPoints <= 0 || averages.expertLevel <= 0) return null
+        expertKills * toaPurpleChance(averages.expertPoints, averages.expertLevel) * (toaItemWeight(item, averages.expertLevel) ?: return null)
+    }
+    return normal + expert
+}
+private fun toaRateDescription(item: String, actual: Int, kills: Map<String, Int>, averages: ToaAverages): String? =
+    toaExpected(item, kills, averages)?.let { expectedText(actual, it) }
+private fun shouldIncludeInWeightedRate(boss: String, item: LogItem, kills: Map<String, Int>, toaAverages: ToaAverages = ToaAverages()): Boolean {
     if (item.quantity > 0) return true
-    val expected = rateDescription(boss, item.name, 0, kills, coxPoints)
+    val expected = rateDescription(boss, item.name, 0, kills, toaAverages)
         ?.substringBefore(" expected")?.toDoubleOrNull() ?: return false
     return expected > 1.0
 }
-fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String? {
-    if (boss == "Chambers of Xeric") return coxRateDescription(item, actual, k, coxPoints)
+fun rateDescription(boss: String, item: String, actual: Int, k: Map<String, Int>, toaAverages: ToaAverages = ToaAverages()): String? {
+    if (boss == "Chambers of Xeric") return coxRateDescription(item, actual, k)
     if (boss == "Abyssal Sire" && item in bludgeonPieces) {
         return expectedText(actual, (k[boss] ?: 0) / (100.0 * 128.0 / 62.0))
     }
-    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return null
+    if (boss == "Tombs of Amascut") return toaRateDescription(item, actual, k, toaAverages)
+    if (boss == "Theatre of Blood") return null
     if (isExcludedFromRateCalculation(item)) return null
     if (isSharedDt2Unique(boss, item)) return sharedDt2Rate(item, actual, k)
     if (boss == "Dagannoth Kings") {
@@ -253,7 +313,11 @@ fun dropRateLabel(boss: String, item: String): String {
         item in setOf("Torn prayer scroll", "Dark relic") -> "1 in 16.5 per completion"
         else -> "Dry rate unavailable"
     }
-    if (boss in setOf("Theatre of Blood", "Tombs of Amascut")) return "Dry rate unavailable — raid points and settings required"
+    if (boss == "Tombs of Amascut") return when (item) {
+        "Osmumten's fang", "Lightbearer", "Elidinis' ward", "Masori mask", "Masori body", "Masori chaps", "Tumeken's shadow (uncharged)" -> "weighted Tombs purple rate"
+        else -> "Dry rate unavailable — special Tombs calculation required"
+    }
+    if (boss == "Theatre of Blood") return "Dry rate unavailable — raid points and settings required"
     if (boss == "Abyssal Sire" && item in bludgeonPieces) return "1 in 206.45"
     if (item in sharedWithSlayerLogItems) return "Not included — dropped by Slayer monster"
     if (item in excludedBossLogItems) return "Not included in dry calculations"
@@ -302,8 +366,9 @@ fun dropRateLabel(boss: String, item: String): String {
     val resolvedDenominator = if (denominator == 0.0) fallbackRate(boss, item) ?: 0.0 else denominator
     return if (resolvedDenominator == 0.0) "not mapped yet" else "1 in ${String.format(Locale.US, "%,.2f", resolvedDenominator).replace(".00", "")}" 
 }
-fun bossSummary(b: BossLog, k: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String? {
-    if (b.name == "Chambers of Xeric") return coxSummary(b.items, k, coxPoints)
+fun bossSummary(b: BossLog, k: Map<String, Int>, toaAverages: ToaAverages = ToaAverages()): String? {
+    if (b.name == "Chambers of Xeric") return coxSummary(b.items, k)
+    if (b.name == "Tombs of Amascut") return toaSummary(b.items, k, toaAverages)
     var weightedRate = 0.0
     var totalWeight = 0.0
     val kills = bossKills(b.name, k)
@@ -318,7 +383,21 @@ fun bossSummary(b: BossLog, k: Map<String, Int>, coxPoints: CoxPointAverages = C
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
 }
-private fun coxSummary(items: List<LogItem>, k: Map<String, Int>, points: CoxPointAverages): String? {
+private fun toaSummary(items: List<LogItem>, kills: Map<String, Int>, averages: ToaAverages): String? {
+    var weightedRate = 0.0
+    var totalWeight = 0.0
+    items.forEach { item ->
+        val expected = toaExpected(item.name, kills, averages) ?: return@forEach
+        if (expected <= 0) return@forEach
+        val rarityWeight = 1.0 / expected
+        weightedRate += (item.quantity / expected) * rarityWeight
+        totalWeight += rarityWeight
+    }
+    if (totalWeight == 0.0) return "Weighted total: Enter Tombs averages"
+    val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
+    return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
+}
+private fun coxSummary(items: List<LogItem>, k: Map<String, Int>): String? {
     var weightedRate = 0.0
     var totalWeight = 0.0
     items.filter { shouldIncludeInWeightedRate("Chambers of Xeric", it, k, points) }.forEach { item ->
@@ -332,11 +411,12 @@ private fun coxSummary(items: List<LogItem>, k: Map<String, Int>, points: CoxPoi
     val percent = kotlin.math.round(weightedRate / totalWeight * 100).toInt()
     return "Weighted total: $percent% ${if (percent < 100) "dry" else "spooned"}"
 }
-fun raidsSummary(bosses: List<BossLog>, k: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String {
+fun raidsSummary(bosses: List<BossLog>, k: Map<String, Int>, toaAverages: ToaAverages = ToaAverages()): String {
     val chambers = bosses.firstOrNull { it.name == "Chambers of Xeric" }
-        ?: return "Mapped weighted rate: no Chambers data available"
-    return coxSummary(chambers.items, k, coxPoints)?.replace("Weighted total", "Chambers mapped rate")
-        ?: "Chambers mapped rate: Haven't hit an expected drop rate"
+    val toa = bosses.firstOrNull { it.name == "Tombs of Amascut" }
+    val chambersSummary = chambers?.let { coxSummary(it.items, k)?.replace("Weighted total", "Chambers mapped rate") }
+    val toaSummary = toa?.let { toaSummary(it.items, k, toaAverages)?.replace("Weighted total", "Tombs mapped rate") }
+    return listOfNotNull(chambersSummary, toaSummary).joinToString("\n").ifEmpty { "Mapped weighted rate: no raid data available" }
 }
 fun accountSummary(bosses: List<BossLog>, k: Map<String, Int>, coxPoints: CoxPointAverages = CoxPointAverages()): String {
     var weightedRate = 0.0

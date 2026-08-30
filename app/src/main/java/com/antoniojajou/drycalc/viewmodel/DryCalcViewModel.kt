@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.antoniojajou.drycalc.data.loadReport
 import com.antoniojajou.drycalc.model.ItemDetail
+import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.Report
+import com.antoniojajou.drycalc.rates.accountSummary
+import com.antoniojajou.drycalc.rates.raidsSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,6 +18,8 @@ import java.util.Locale
 
 data class DryCalcUiState(
     val username: String = "",
+    val regularCoxPoints: String = "49750",
+    val challengeCoxPoints: String = "66400",
     val report: Report? = null,
     val status: String = "Tap Load boss rates to fetch your data.",
     val isLoading: Boolean = false,
@@ -27,11 +32,35 @@ class DryCalcViewModel : ViewModel() {
     val uiState: StateFlow<DryCalcUiState> = _uiState.asStateFlow()
 
     fun updateUsername(username: String) = _uiState.update { it.copy(username = username) }
+    fun updateRegularCoxPoints(points: String) = _uiState.update { it.copy(regularCoxPoints = points) }
+    fun updateChallengeCoxPoints(points: String) = _uiState.update { it.copy(challengeCoxPoints = points) }
+
+    fun applyCoxPoints() {
+        val report = _uiState.value.report ?: return
+        val points = CoxPointAverages(
+            regular = _uiState.value.regularCoxPoints.toDoubleOrNull() ?: 0.0,
+            challenge = _uiState.value.challengeCoxPoints.toDoubleOrNull() ?: 0.0
+        )
+        if (points.regular <= 0 || points.challenge <= 0) {
+            _uiState.update { it.copy(status = "Enter positive average Chambers points for regular and Challenge Mode.") }
+            return
+        }
+        val summary = if (report.tabName == "Bosses") accountSummary(report.bosses, report.kills, points) else raidsSummary(report.bosses, report.kills, points)
+        _uiState.update { it.copy(report = report.copy(coxPoints = points, accountRate = summary)) }
+    }
 
     fun loadTab(tabName: String) {
         val username = _uiState.value.username.trim()
         if (username.isEmpty()) {
             _uiState.update { it.copy(status = "Enter a RuneScape username first.") }
+            return
+        }
+        val coxPoints = CoxPointAverages(
+            regular = _uiState.value.regularCoxPoints.toDoubleOrNull() ?: 0.0,
+            challenge = _uiState.value.challengeCoxPoints.toDoubleOrNull() ?: 0.0
+        )
+        if (coxPoints.regular <= 0 || coxPoints.challenge <= 0) {
+            _uiState.update { it.copy(status = "Enter positive average Chambers points for regular and Challenge Mode.") }
             return
         }
 
@@ -44,7 +73,7 @@ class DryCalcViewModel : ViewModel() {
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { loadReport(username, tabName) }
+            runCatching { loadReport(username, tabName, coxPoints) }
                 .onSuccess { report ->
                     _uiState.update {
                         it.copy(

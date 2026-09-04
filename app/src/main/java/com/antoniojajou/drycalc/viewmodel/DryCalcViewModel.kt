@@ -8,6 +8,7 @@ import com.antoniojajou.drycalc.model.CoxPointAverages
 import com.antoniojajou.drycalc.model.Report
 import com.antoniojajou.drycalc.model.ToaAverages
 import com.antoniojajou.drycalc.rates.raidsSummary
+import com.antoniojajou.drycalc.rates.accountSummary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,8 @@ import java.util.Locale
 
 data class DryCalcUiState(
     val username: String = "",
+    val regularCoxPoints: String = "49750",
+    val challengeCoxPoints: String = "66400",
     val normalToaPoints: String = "",
     val normalToaLevel: String = "",
     val expertToaPoints: String = "",
@@ -34,6 +37,8 @@ class DryCalcViewModel : ViewModel() {
     val uiState: StateFlow<DryCalcUiState> = _uiState.asStateFlow()
 
     fun updateUsername(username: String) = _uiState.update { it.copy(username = username) }
+    fun updateRegularCoxPoints(points: String) = _uiState.update { it.copy(regularCoxPoints = points) }
+    fun updateChallengeCoxPoints(points: String) = _uiState.update { it.copy(challengeCoxPoints = points) }
     fun updateNormalToaPoints(value: String) = _uiState.update { it.copy(normalToaPoints = value) }
     fun updateNormalToaLevel(value: String) = _uiState.update { it.copy(normalToaLevel = value) }
     fun updateExpertToaPoints(value: String) = _uiState.update { it.copy(expertToaPoints = value) }
@@ -59,7 +64,7 @@ class DryCalcViewModel : ViewModel() {
             )
         }
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { loadReport(username, tabName, toaAveragesFromState()) }
+            runCatching { loadReport(username, tabName, coxPointsFromState(), toaAveragesFromState()) }
                 .onSuccess { report ->
                     _uiState.update {
                         it.copy(
@@ -85,6 +90,17 @@ class DryCalcViewModel : ViewModel() {
 
     fun hideItem() = _uiState.update { it.copy(selectedItem = null) }
 
+    fun applyCoxPoints() {
+        val report = _uiState.value.report ?: return
+        val points = coxPointsFromState()
+        if (points.regular <= 0 || points.challenge <= 0) {
+            _uiState.update { it.copy(status = "Enter positive average Chambers points for regular and Challenge Mode.") }
+            return
+        }
+        val summary = if (report.tabName == "Bosses") accountSummary(report.bosses, report.kills, points) else raidsSummary(report.bosses, report.kills, points, report.toaAverages)
+        _uiState.update { it.copy(report = report.copy(coxPoints = points, accountRate = summary)) }
+    }
+
     fun applyToaAverages() {
         val report = _uiState.value.report ?: return
         val averages = toaAveragesFromState()
@@ -100,7 +116,7 @@ class DryCalcViewModel : ViewModel() {
             _uiState.update { it.copy(status = "Expert Tombs raid level must be at least 300.") }
             return
         }
-        _uiState.update { it.copy(report = report.copy(toaAverages = averages, accountRate = raidsSummary(report.bosses, report.kills, averages))) }
+        _uiState.update { it.copy(report = report.copy(toaAverages = averages, accountRate = raidsSummary(report.bosses, report.kills, report.coxPoints, averages))) }
     }
 
     private fun toaAveragesFromState() = ToaAverages(
@@ -108,6 +124,11 @@ class DryCalcViewModel : ViewModel() {
         normalLevel = _uiState.value.normalToaLevel.toDoubleOrNull() ?: 0.0,
         expertPoints = _uiState.value.expertToaPoints.toDoubleOrNull() ?: 0.0,
         expertLevel = _uiState.value.expertToaLevel.toDoubleOrNull() ?: 0.0
+    )
+
+    private fun coxPointsFromState() = CoxPointAverages(
+        regular = _uiState.value.regularCoxPoints.toDoubleOrNull() ?: 0.0,
+        challenge = _uiState.value.challengeCoxPoints.toDoubleOrNull() ?: 0.0
     )
 
     private fun expertLevelIsBelowMinimum(): Boolean {

@@ -52,7 +52,7 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 Spacer(Modifier.height(12.dp))
             }
             when {
-                uiState.selectedItem != null -> item { ItemDetailsScreen(uiState.selectedItem!!, uiState.report?.kills.orEmpty(), uiState.report?.toaAverages ?: ToaAverages(), viewModel::hideItem) }
+                uiState.selectedItem != null -> item { ItemDetailsScreen(uiState.selectedItem!!, uiState.report?.kills.orEmpty(), uiState.report?.toaAverages ?: ToaAverages(), uiState.report?.coxPoints ?: CoxPointAverages(), viewModel::hideItem) }
                 uiState.selectedTab == null -> item {
                     Button(onClick = { viewModel.loadTab("Bosses") }, enabled = !uiState.isLoading, colors = ButtonDefaults.buttonColors(containerColor = Gold, contentColor = Ink), modifier = Modifier.fillMaxWidth()) { Text("Boss log") }
                     Spacer(Modifier.height(10.dp))
@@ -66,7 +66,7 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                         Spacer(Modifier.height(18.dp)); Text(uiState.status, color = Ink, fontSize = 15.sp)
                     }
                     uiState.report?.bosses?.forEach { boss -> item(key = boss.name) {
-                        BossCard(boss, uiState.report!!.kills, uiState.report!!.toaAverages, uiState, viewModel) { detail ->
+                        BossCard(boss, uiState.report!!.kills, uiState.report!!.toaAverages, uiState.report!!.coxPoints, uiState, viewModel) { detail ->
                             returnScrollIndex = listState.firstVisibleItemIndex
                             returnScrollOffset = listState.firstVisibleItemScrollOffset
                             restoreScrollPosition = true
@@ -99,13 +99,25 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
     OutlinedButton(viewModel::applyToaAverages, Modifier.fillMaxWidth()) { Text("Apply Tombs averages") }
 }
 
+@Composable private fun CoxPointInputs(state: DryCalcUiState, viewModel: DryCalcViewModel) {
+    Spacer(Modifier.height(10.dp))
+    Text("Set your average points per completion", color = Ink, fontSize = 14.sp)
+    Spacer(Modifier.height(6.dp))
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        ToaNumberField(state.regularCoxPoints, viewModel::updateRegularCoxPoints, "Regular", Modifier.weight(1f))
+        ToaNumberField(state.challengeCoxPoints, viewModel::updateChallengeCoxPoints, "Challenge", Modifier.weight(1f))
+    }
+    Spacer(Modifier.height(8.dp))
+    OutlinedButton(viewModel::applyCoxPoints, Modifier.fillMaxWidth()) { Text("Apply Chambers averages") }
+}
+
 @Composable private fun ToaNumberField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier) {
     OutlinedTextField(value, onValueChange, label = { Text(label) }, singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), modifier = modifier,
         colors = OutlinedTextFieldDefaults.colors(focusedTextColor = Ink, unfocusedTextColor = Ink, focusedBorderColor = GoldDark, focusedLabelColor = GoldDark))
 }
 
-@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, toaAverages: ToaAverages, uiState: DryCalcUiState, viewModel: DryCalcViewModel, onItemClick: (ItemDetail) -> Unit) {
+@Composable private fun BossCard(boss: BossLog, kills: Map<String, Int>, toaAverages: ToaAverages, coxPoints: CoxPointAverages, uiState: DryCalcUiState, viewModel: DryCalcViewModel, onItemClick: (ItemDetail) -> Unit) {
     var expanded by rememberSaveable(boss.name) { mutableStateOf(false) }
     if (boss.items.isEmpty()) return
     val cardColor = if (boss.items.all { it.quantity > 0 }) CompletedParchment else Parchment
@@ -115,20 +127,21 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
             Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }, verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("${boss.name} — ${collectionKills(boss.name, kills)}", color = GoldDark, fontSize = 19.sp, fontWeight = FontWeight.Bold)
-                    if (boss.name == "Chambers of Xeric") Text("Assumed points per completion: Regular 49,750 • Challenge 66,400", color = Ink, fontSize = 13.sp)
-                    bossSummary(boss, kills, toaAverages)?.let { Text(it, color = Ink, fontSize = 14.sp) }
+                    if (boss.name == "Chambers of Xeric") Text("Average points: Regular ${formatPoints(coxPoints.regular)} • Challenge ${formatPoints(coxPoints.challenge)}", color = Ink, fontSize = 13.sp)
+                    bossSummary(boss, kills, toaAverages, coxPoints)?.let { Text(it, color = Ink, fontSize = 14.sp) }
                 }
                 Text(if (expanded) "⌃" else "⌄", color = GoldDark, fontSize = 30.sp)
             }
             if (expanded) {
                 if (boss.name == "Tombs of Amascut") ToaAverageInputs(uiState, viewModel)
-                boss.items.forEach { item -> ItemRow(boss.name, item, kills, toaAverages) { onItemClick(ItemDetail(boss.name, it)) } }
+                if (boss.name == "Chambers of Xeric") CoxPointInputs(uiState, viewModel)
+                boss.items.forEach { item -> ItemRow(boss.name, item, kills, toaAverages, coxPoints) { onItemClick(ItemDetail(boss.name, it)) } }
             }
         }
     }
 }
 
-@Composable private fun ItemRow(boss: String, item: LogItem, kills: Map<String, Int>, toaAverages: ToaAverages, onItemClick: (LogItem) -> Unit) {
+@Composable private fun ItemRow(boss: String, item: LogItem, kills: Map<String, Int>, toaAverages: ToaAverages, coxPoints: CoxPointAverages, onItemClick: (LogItem) -> Unit) {
     val bitmap by produceState<android.graphics.Bitmap?>(null, item.id) { value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeStream(URL("https://cdn.runeprofile.com/item/${item.id}.png").openStream()) }.getOrNull() } }
     val obtained = item.quantity > 0
     val showDropRate = !(boss == "Chambers of Xeric" && coxItemWeight(item.name) != null)
@@ -140,18 +153,18 @@ fun OsrsDryCalcApp(viewModel: DryCalcViewModel) {
                 val rateLabel = dropRateLabel(boss, item.name)
                 Text(if (isExcludedFromRateCalculation(item.name)) rateLabel else "Expected drop rate: $rateLabel", color = Ink, fontSize = 14.sp)
             }
-            val rate = if (obtained) rateDescription(boss, item.name, item.quantity, kills, toaAverages) else uncollectedRateDescription(boss, item.name, kills, toaAverages)
+            val rate = if (obtained) rateDescription(boss, item.name, item.quantity, kills, toaAverages, coxPoints) else uncollectedRateDescription(boss, item.name, kills, toaAverages, coxPoints)
             rate?.let { Text("Rate: $it", color = Ink, fontSize = 14.sp) }
         }
         Spacer(Modifier.weight(1f)); Text("›", color = GoldDark, fontSize = 28.sp)
     }
 }
 
-@Composable private fun ItemDetailsScreen(detail: ItemDetail, kills: Map<String, Int>, toaAverages: ToaAverages, onBack: () -> Unit) {
+@Composable private fun ItemDetailsScreen(detail: ItemDetail, kills: Map<String, Int>, toaAverages: ToaAverages, coxPoints: CoxPointAverages, onBack: () -> Unit) {
     val item = detail.item
     val bitmap by produceState<android.graphics.Bitmap?>(null, item.id) { value = withContext(Dispatchers.IO) { runCatching { BitmapFactory.decodeStream(URL("https://cdn.runeprofile.com/item/${item.id}.png").openStream()) }.getOrNull() } }
     val obtained = item.quantity > 0
-    val calculatedRate = if (obtained) rateDescription(detail.boss, item.name, item.quantity, kills, toaAverages) else uncollectedRateDescription(detail.boss, item.name, kills, toaAverages)
+    val calculatedRate = if (obtained) rateDescription(detail.boss, item.name, item.quantity, kills, toaAverages, coxPoints) else uncollectedRateDescription(detail.boss, item.name, kills, toaAverages, coxPoints)
     Column(Modifier.fillMaxWidth()) {
         OutlinedButton(onBack, Modifier.fillMaxWidth()) { Text("Back to ${detail.boss}") }
         Spacer(Modifier.height(20.dp)); Text("Item details", color = GoldDark, fontSize = 28.sp, fontWeight = FontWeight.Bold); Spacer(Modifier.height(12.dp))
